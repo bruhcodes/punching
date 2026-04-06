@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Punch Card App"
+version = "1.0.0"
+id = "artifacts/punch-card"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 23580
+
+[services.development]
+run = "pnpm --filter @workspace/punch-card run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/punch-card", "run", "build" ]
+publicDir = "artifacts/punch-card/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "23580"
+BASE_PATH = "/"

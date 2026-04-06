@@ -1,0 +1,194 @@
+I want you to generate a full project for a **digital punch-card system** for coffee/boba shops as a **Progressive Web App (PWA)** using **React frontend** and **Supabase backend**, with a **clean Apple-style UI**.
+
+This is NOT using Apple Wallet for now. Everything is handled inside the web app.
+
+---
+
+### **CORE REQUIREMENT: APP-LIKE EXPERIENCE (PWA)**
+
+1. When users first open the app:
+   - Show a full-screen modal:
+     “Add this app to your Home Screen for the best experience”
+   - Detect if the app is NOT installed
+   - Give two options:
+     - “Add to Home Screen”
+     - “Skip”
+   - User cannot proceed until they choose one
+
+2. After that:
+   - Go to onboarding
+
+3. Include:
+   - manifest.json
+   - service worker
+   - install prompt handling
+   - basic offline support
+
+---
+
+### **USER FLOW**
+
+1. User opens app → sees install prompt
+2. User continues → onboarding form:
+   - Input:
+     - Name
+     - Phone number
+
+3. On submit:
+   - Create user in Supabase:
+     - id (UUID)
+     - name
+     - phone
+     - punch_count = 0
+     - total_punches = 10
+     - created_at timestamp
+   - Generate a QR code for that user (used for admin lookup)
+
+4. User dashboard:
+   - Show a **digital punch card**
+   - Display:
+     - Punch progress (stamps, stars, or progress bar)
+     - QR code (for admin to scan)
+   - Clean Apple-style UI
+   - Show basic profile info
+
+---
+
+### **ADMIN DASHBOARD (FULL CONTROL)**
+
+Admin must be able to access EVERYTHING.
+
+1. Dashboard:
+   - View ALL users
+   - Search users by:
+     - Name
+     - Phone
+     - ID
+     - OR scan QR code
+
+2. User Details Page:
+   - Show:
+     - Name
+     - Phone
+     - Punch count
+     - Total punches
+     - Date joined (created_at)
+   - Buttons:
+     - “Add Punch”
+     - “Remove Punch”
+     - “Reset Punches”
+
+3. Punch Management:
+   - When admin clicks “Add Punch”:
+     - Increase punch_count
+     - Instantly update UI
+
+4. Style Customization:
+   - Admin can change:
+     - Stamp type (star, coffee, boba, heart)
+     - Background color or gradient
+     - Progress style (bar, rings, stamps)
+   - Changes apply to all users in real time
+
+5. Notifications Tab:
+   - Admin selects users
+   - Sends message
+   - Message stored in database
+   - Users see notifications in their app
+
+---
+
+### **DATABASE (SUPABASE)**
+
+**Users Table**
+- id (UUID)
+- name (text)
+- phone (text)
+- punch_count (int)
+- total_punches (int)
+- qr_code (text)
+- created_at (timestamp)
+
+**Notifications Table**
+- id (UUID)
+- user_id (UUID)
+- message (text)
+- created_at (timestamp)
+- read (boolean)
+
+**Settings Table (for styles)**
+- id
+- stamp_type
+- background_style
+- progress_style
+
+---
+
+### **APIs**
+
+- POST /users → create user
+- GET /users → get all users (admin)
+- GET /users/:id → get single user
+- POST /users/:id/punch → add punch
+- POST /users/:id/remove → remove punch
+- POST /users/:id/reset → reset punches
+- POST /notifications → send notification
+
+---
+
+### **FRONTEND (REACT + TAILWIND)**
+
+User App:
+- Install prompt screen
+- Onboarding form
+- Punch card screen
+- QR code display
+- Notifications page
+
+Admin App:
+- Dashboard with all users
+- Search + QR scanner
+- User detail page
+- Punch controls (add/remove/reset)
+- Style editor
+- Notifications panel
+
+---
+
+### **DESIGN REQUIREMENTS**
+
+- Apple-style UI:
+  - Clean white layout
+  - Rounded cards
+  - Soft shadows
+  - Smooth animations
+- Mobile-first design
+- Fast and responsive
+
+---
+
+### **EXTRAS**
+
+- QR code generation per user
+- Real-time updates using Supabase subscriptions
+- Modular architecture
+- Clear instructions to run locally
+
+---
+
+### **IMPORTANT**
+
+- No Apple Wallet integration
+- Everything runs inside the web app
+- Must feel like a real mobile app (PWA)
+
+---
+
+Generate full project:
+- React frontend (PWA enabled)
+- Supabase setup
+- Backend/API logic
+- Admin dashboard
+- User onboarding
+- QR system
+- Instructions to run

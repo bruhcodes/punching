@@ -25,3 +25,32 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## Punch Card PWA App
+
+A digital punch card loyalty system for coffee/boba shops.
+
+### Artifact: `punch-card` (previewPath: `/`)
+React + Vite PWA frontend. Located in `artifacts/punch-card/`.
+
+### Features
+- **PWA**: install prompt (manifest.json + service worker), offline support
+- **User flow**: install prompt → onboarding (name/phone) → punch card with QR code → notifications
+- **Admin dashboard**: stats overview, user management, punch controls (add/remove/reset), notifications panel, style settings
+- **QR codes**: each user gets a UUID-based QR code for admin scanning
+
+### Database Tables
+- `users` — id (UUID text), name, phone, punch_count, total_punches, qr_code, created_at
+- `notifications` — id (UUID text), user_id, message, read, created_at
+- `settings` — id ("default"), stamp_type, background_style, progress_style, shop_name
+
+### API Routes (`/api`)
+- `GET/POST /users` — list/create users
+- `GET /users/:id` — get user
+- `POST /users/:id/punch` — add punch
+- `POST /users/:id/remove-punch` — remove punch
+- `POST /users/:id/reset` — reset punches
+- `GET/POST /notifications` — list/send notifications
+- `POST /notifications/:id/read` — mark read
+- `GET/PATCH /settings` — get/update settings
+- `GET /stats` — admin dashboard stats

@@ -1,0 +1,17 @@
+{
+  "name": "Punch Card",
+  "short_name": "Punch",
+  "description": "Digital punch card for your favorite coffee shop",
+  "display": "standalone",
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#1a1a1a",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x1024",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
