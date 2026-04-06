@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, notificationsTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
+import { db, notificationsTable, pushSubscriptionsTable } from "@workspace/db";
 import {
   SendNotificationBody,
   ListNotificationsQueryParams,
@@ -9,6 +9,25 @@ import {
   MarkNotificationReadResponse,
 } from "@workspace/api-zod";
 import { randomUUID } from "crypto";
+import webpush from "web-push";
+
+// Configure VAPID once at startup — strip any "=" padding that web-push rejects
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+  const pubKey = process.env.VAPID_PUBLIC_KEY.replace(/=+$/, "").trim();
+  const privKey = process.env.VAPID_PRIVATE_KEY.replace(/=+$/, "").trim();
+  try {
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT || "mailto:admin@punchcard.app",
+      pubKey,
+      privKey,
+    );
+  } catch (e) {
+    // Log but don't crash — push will simply not be sent
+    import("../lib/logger").then(({ logger }) =>
+      logger.warn({ err: e }, "VAPID setup failed — web push disabled"),
+    );
+  }
+}
 
 const router: IRouter = Router();
 
@@ -42,6 +61,7 @@ router.post("/notifications", async (req, res): Promise<void> => {
     return;
   }
 
+  // Save notification records
   const rows = userIds.map((userId) => ({
     id: randomUUID(),
     userId,
@@ -53,6 +73,40 @@ router.post("/notifications", async (req, res): Promise<void> => {
     .insert(notificationsTable)
     .values(rows)
     .returning();
+
+  // Send Web Push to each subscribed user (fire-and-forget, don't block response)
+  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    const subscriptions = await db
+      .select()
+      .from(pushSubscriptionsTable)
+      .where(inArray(pushSubscriptionsTable.userId, userIds));
+
+    const payload = JSON.stringify({
+      title: "New message from your shop",
+      body: message,
+      url: "/notifications",
+    });
+
+    const sendPromises = subscriptions.map(async (sub) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+          payload,
+        );
+      } catch (err: unknown) {
+        // If subscription is expired/invalid, remove it
+        const status = (err as { statusCode?: number }).statusCode;
+        if (status === 410 || status === 404) {
+          await db
+            .delete(pushSubscriptionsTable)
+            .where(eq(pushSubscriptionsTable.id, sub.id));
+        }
+      }
+    });
+
+    // Send in background, respond immediately
+    Promise.all(sendPromises).catch(() => {});
+  }
 
   res.status(201).json(inserted);
 });
