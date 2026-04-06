@@ -27,3 +27,9 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.shared]
+VAPID_PUBLIC_KEY = "BMP6r_qzNhM1lIaW3-JVragiY0l8q7LB9QH-QuyprGzBmFEOSgkGnvnuwTRZPLdQTAHAElsq8fbYBxlzXaicPnY"
+VAPID_SUBJECT = "mailto:admin@punchcard.app"
