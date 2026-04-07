@@ -13,6 +13,7 @@ export interface User {
   id: string;
   name: string;
   phone: string;
+  avatarUrl?: string | null;
   punchCount: number;
   totalPunches: number;
   qrCode: string;
@@ -22,6 +23,13 @@ export interface User {
 export interface CreateUserBody {
   name: string;
   phone: string;
+  avatarUrl?: string;
+}
+
+export interface UpdateUserBody {
+  name?: string;
+  phone?: string;
+  avatarUrl?: string;
 }
 
 export interface Notification {
@@ -43,6 +51,9 @@ export interface Settings {
   backgroundStyle: string;
   progressStyle: string;
   shopName: string;
+  backgroundImageUrl?: string | null;
+  accentColor?: string | null;
+  welcomeMessage?: string | null;
 }
 
 export interface UpdateSettingsBody {
@@ -50,6 +61,9 @@ export interface UpdateSettingsBody {
   backgroundStyle?: string;
   progressStyle?: string;
   shopName?: string;
+  backgroundImageUrl?: string;
+  accentColor?: string;
+  welcomeMessage?: string;
 }
 
 export interface Stats {

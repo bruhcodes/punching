@@ -1,5 +1,5 @@
 import { useRoute } from "wouter";
-import { useGetUser, getGetUserQueryKey, useAddPunch, useRemovePunch, useResetPunches, useGetSettings, getGetSettingsQueryKey, getGetStatsQueryKey } from "@workspace/api-client-react";
+import { useGetUser, getGetUserQueryKey, useAddPunch, useRemovePunch, useResetPunches, useGetSettings, getGetSettingsQueryKey, getGetStatsQueryKey, getListUsersQueryKey } from "@workspace/api-client-react";
 import { AdminLayout } from "@/components/layout/Layouts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,11 +29,16 @@ export default function AdminUserDetail() {
   const removePunch = useRemovePunch();
   const resetPunches = useResetPunches();
 
+  const refreshUserData = (data: unknown) => {
+    queryClient.setQueryData(getGetUserQueryKey(userId), data);
+    queryClient.invalidateQueries({ queryKey: getListUsersQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetStatsQueryKey() });
+  };
+
   const handleAddPunch = () => {
     addPunch.mutate({ id: userId }, {
       onSuccess: (data) => {
-        queryClient.setQueryData(getGetUserQueryKey(userId), data);
-        queryClient.invalidateQueries({ queryKey: getGetStatsQueryKey() });
+        refreshUserData(data);
         toast.success("Punch added successfully");
       },
       onError: () => toast.error("Failed to add punch")
@@ -43,7 +48,7 @@ export default function AdminUserDetail() {
   const handleRemovePunch = () => {
     removePunch.mutate({ id: userId }, {
       onSuccess: (data) => {
-        queryClient.setQueryData(getGetUserQueryKey(userId), data);
+        refreshUserData(data);
         toast.success("Punch removed");
       },
       onError: () => toast.error("Failed to remove punch")
@@ -55,7 +60,7 @@ export default function AdminUserDetail() {
     
     resetPunches.mutate({ id: userId }, {
       onSuccess: (data) => {
-        queryClient.setQueryData(getGetUserQueryKey(userId), data);
+        refreshUserData(data);
         toast.success("Punches reset to 0");
       },
       onError: () => toast.error("Failed to reset punches")

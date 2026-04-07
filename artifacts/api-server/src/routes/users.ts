@@ -1,8 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, or, ilike, sql } from "drizzle-orm";
-import { db, usersTable } from "@workspace/db";
 import {
-  CreateUserBody,
   GetUserParams,
   AddPunchParams,
   RemovePunchParams,
@@ -14,9 +11,50 @@ import {
   RemovePunchResponse,
   ResetPunchesResponse,
 } from "@workspace/api-zod";
-import { randomUUID } from "crypto";
+import {
+  createUserRecord,
+  deleteUserRecord,
+  findUserByPhone,
+  getUserById,
+  listUsers,
+  updateUserRecord,
+  updateUserPunchCount,
+} from "../lib/supabase";
 
 const router: IRouter = Router();
+
+function parseCreateUserBody(body: unknown) {
+  if (!body || typeof body !== "object") return null;
+  const candidate = body as Record<string, unknown>;
+  if (typeof candidate.name !== "string" || typeof candidate.phone !== "string") return null;
+
+  return {
+    name: candidate.name,
+    phone: candidate.phone,
+    avatarUrl: typeof candidate.avatarUrl === "string" ? candidate.avatarUrl : undefined,
+  };
+}
+
+function parseUpdateUserBody(body: unknown) {
+  if (!body || typeof body !== "object") return null;
+  const candidate = body as Record<string, unknown>;
+  const parsed: { name?: string; phone?: string; avatarUrl?: string } = {};
+
+  if (candidate.name !== undefined) {
+    if (typeof candidate.name !== "string") return null;
+    parsed.name = candidate.name;
+  }
+  if (candidate.phone !== undefined) {
+    if (typeof candidate.phone !== "string") return null;
+    parsed.phone = candidate.phone;
+  }
+  if (candidate.avatarUrl !== undefined) {
+    if (typeof candidate.avatarUrl !== "string") return null;
+    parsed.avatarUrl = candidate.avatarUrl;
+  }
+
+  return parsed;
+}
 
 router.get("/users", async (req, res): Promise<void> => {
   const parsed = ListUsersQueryParams.safeParse(req.query);
@@ -26,51 +64,26 @@ router.get("/users", async (req, res): Promise<void> => {
   }
   const { search } = parsed.data;
 
-  let users;
-  if (search) {
-    users = await db
-      .select()
-      .from(usersTable)
-      .where(
-        or(
-          ilike(usersTable.name, `%${search}%`),
-          ilike(usersTable.phone, `%${search}%`),
-          ilike(usersTable.id, `%${search}%`)
-        )
-      )
-      .orderBy(usersTable.createdAt);
-  } else {
-    users = await db.select().from(usersTable).orderBy(usersTable.createdAt);
-  }
+  const users = await listUsers(search);
 
   res.json(ListUsersResponse.parse(users));
 });
 
 router.post("/users", async (req, res): Promise<void> => {
-  const parsed = CreateUserBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
+  const parsed = parseCreateUserBody(req.body);
+  if (!parsed) {
+    res.status(400).json({ error: "Invalid request body" });
     return;
   }
-  const { name, phone } = parsed.data;
+  const { name, phone, avatarUrl } = parsed;
 
-  const existing = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.phone, phone))
-    .limit(1);
-  if (existing.length > 0) {
+  const existing = await findUserByPhone(phone);
+  if (existing) {
     res.status(409).json({ error: "Phone number already registered" });
     return;
   }
 
-  const id = randomUUID();
-  const qrCode = id;
-
-  const [user] = await db
-    .insert(usersTable)
-    .values({ id, name, phone, qrCode, punchCount: 0, totalPunches: 10 })
-    .returning();
+  const user = await createUserRecord(name, phone, avatarUrl);
 
   res.status(201).json(GetUserResponse.parse(user));
 });
@@ -83,11 +96,7 @@ router.get("/users/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [user] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, params.data.id))
-    .limit(1);
+  const user = await getUserById(params.data.id);
 
   if (!user) {
     res.status(404).json({ error: "User not found" });
@@ -95,6 +104,57 @@ router.get("/users/:id", async (req, res): Promise<void> => {
   }
 
   res.json(GetUserResponse.parse(user));
+});
+
+router.patch("/users/:id", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const params = GetUserParams.safeParse({ id: raw });
+  const body = parseUpdateUserBody(req.body);
+
+  if (!params.success || !body) {
+    res.status(400).json({ error: params.success ? "Invalid request body" : params.error.message });
+    return;
+  }
+
+  const existing = await getUserById(params.data.id);
+  if (!existing) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  if (body.phone && body.phone !== existing.phone) {
+    const phoneMatch = await findUserByPhone(body.phone);
+    if (phoneMatch && phoneMatch.id !== existing.id) {
+      res.status(409).json({ error: "Phone number already registered" });
+      return;
+    }
+  }
+
+  const user = await updateUserRecord(params.data.id, body);
+  if (!user) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  res.json(GetUserResponse.parse(user));
+});
+
+router.delete("/users/:id", async (req, res): Promise<void> => {
+  const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const params = GetUserParams.safeParse({ id: raw });
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+
+  const existing = await getUserById(params.data.id);
+  if (!existing) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  await deleteUserRecord(params.data.id);
+  res.status(204).send();
 });
 
 router.post("/users/:id/punch", async (req, res): Promise<void> => {
@@ -105,11 +165,14 @@ router.post("/users/:id/punch", async (req, res): Promise<void> => {
     return;
   }
 
-  const [user] = await db
-    .update(usersTable)
-    .set({ punchCount: sql`${usersTable.punchCount} + 1` })
-    .where(eq(usersTable.id, params.data.id))
-    .returning();
+  const existing = await getUserById(params.data.id);
+  if (!existing) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const nextPunchCount = Math.min(existing.totalPunches, existing.punchCount + 1);
+  const user = await updateUserPunchCount(params.data.id, nextPunchCount);
 
   if (!user) {
     res.status(404).json({ error: "User not found" });
@@ -127,24 +190,14 @@ router.post("/users/:id/remove-punch", async (req, res): Promise<void> => {
     return;
   }
 
-  const [existing] = await db
-    .select()
-    .from(usersTable)
-    .where(eq(usersTable.id, params.data.id))
-    .limit(1);
+  const existing = await getUserById(params.data.id);
 
   if (!existing) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
-  const newCount = Math.max(0, existing.punchCount - 1);
-
-  const [user] = await db
-    .update(usersTable)
-    .set({ punchCount: newCount })
-    .where(eq(usersTable.id, params.data.id))
-    .returning();
+  const user = await updateUserPunchCount(params.data.id, Math.max(0, existing.punchCount - 1));
 
   res.json(RemovePunchResponse.parse(user));
 });
@@ -157,11 +210,7 @@ router.post("/users/:id/reset", async (req, res): Promise<void> => {
     return;
   }
 
-  const [user] = await db
-    .update(usersTable)
-    .set({ punchCount: 0 })
-    .where(eq(usersTable.id, params.data.id))
-    .returning();
+  const user = await updateUserPunchCount(params.data.id, 0);
 
   if (!user) {
     res.status(404).json({ error: "User not found" });

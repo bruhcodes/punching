@@ -1,38 +1,15 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, settingsTable } from "@workspace/db";
 import {
   UpdateSettingsBody,
   GetSettingsResponse,
   UpdateSettingsResponse,
 } from "@workspace/api-zod";
+import { getOrCreateSettings, updateSettingsRecord } from "../lib/supabase";
 
 const router: IRouter = Router();
 
-async function ensureSettings() {
-  const [existing] = await db
-    .select()
-    .from(settingsTable)
-    .where(eq(settingsTable.id, "default"))
-    .limit(1);
-  if (!existing) {
-    const [created] = await db
-      .insert(settingsTable)
-      .values({
-        id: "default",
-        stampType: "star",
-        backgroundStyle: "white",
-        progressStyle: "stamps",
-        shopName: "Punch Card",
-      })
-      .returning();
-    return created;
-  }
-  return existing;
-}
-
 router.get("/settings", async (req, res): Promise<void> => {
-  const settings = await ensureSettings();
+  const settings = await getOrCreateSettings();
   res.json(GetSettingsResponse.parse(settings));
 });
 
@@ -43,13 +20,7 @@ router.patch("/settings", async (req, res): Promise<void> => {
     return;
   }
 
-  await ensureSettings();
-
-  const [updated] = await db
-    .update(settingsTable)
-    .set(parsed.data)
-    .where(eq(settingsTable.id, "default"))
-    .returning();
+  const updated = await updateSettingsRecord(parsed.data);
 
   res.json(UpdateSettingsResponse.parse(updated));
 });

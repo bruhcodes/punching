@@ -70,7 +70,7 @@ export default function InstallPrompt() {
           className="w-full max-w-[400px] flex flex-col items-center text-center space-y-8"
         >
           <div className="w-24 h-24 bg-primary/5 rounded-3xl flex items-center justify-center mb-4">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLineLinejoin="round" className="text-primary"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
           
           <div className="space-y-3">

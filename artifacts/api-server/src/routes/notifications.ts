@@ -1,6 +1,4 @@
 import { Router, type IRouter } from "express";
-import { eq, inArray } from "drizzle-orm";
-import { db, notificationsTable, pushSubscriptionsTable } from "@workspace/db";
 import {
   SendNotificationBody,
   ListNotificationsQueryParams,
@@ -8,8 +6,14 @@ import {
   MarkNotificationReadParams,
   MarkNotificationReadResponse,
 } from "@workspace/api-zod";
-import { randomUUID } from "crypto";
 import webpush from "web-push";
+import {
+  createNotifications,
+  deletePushSubscriptionById,
+  listNotificationsByUser,
+  listPushSubscriptionsByUserIds,
+  markNotificationReadById,
+} from "../lib/supabase";
 
 // Configure VAPID once at startup — strip any "=" padding that web-push rejects
 if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
@@ -38,11 +42,7 @@ router.get("/notifications", async (req, res): Promise<void> => {
     return;
   }
 
-  const notifications = await db
-    .select()
-    .from(notificationsTable)
-    .where(eq(notificationsTable.userId, parsed.data.userId))
-    .orderBy(notificationsTable.createdAt);
+  const notifications = await listNotificationsByUser(parsed.data.userId);
 
   res.json(ListNotificationsResponse.parse(notifications));
 });
@@ -62,24 +62,11 @@ router.post("/notifications", async (req, res): Promise<void> => {
   }
 
   // Save notification records
-  const rows = userIds.map((userId) => ({
-    id: randomUUID(),
-    userId,
-    message,
-    read: false,
-  }));
-
-  const inserted = await db
-    .insert(notificationsTable)
-    .values(rows)
-    .returning();
+  const inserted = await createNotifications(userIds, message);
 
   // Send Web Push to each subscribed user (fire-and-forget, don't block response)
   if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-    const subscriptions = await db
-      .select()
-      .from(pushSubscriptionsTable)
-      .where(inArray(pushSubscriptionsTable.userId, userIds));
+    const subscriptions = await listPushSubscriptionsByUserIds(userIds);
 
     const payload = JSON.stringify({
       title: "New message from your shop",
@@ -97,9 +84,7 @@ router.post("/notifications", async (req, res): Promise<void> => {
         // If subscription is expired/invalid, remove it
         const status = (err as { statusCode?: number }).statusCode;
         if (status === 410 || status === 404) {
-          await db
-            .delete(pushSubscriptionsTable)
-            .where(eq(pushSubscriptionsTable.id, sub.id));
+          await deletePushSubscriptionById(sub.id);
         }
       }
     });
@@ -119,11 +104,7 @@ router.post("/notifications/:id/read", async (req, res): Promise<void> => {
     return;
   }
 
-  const [notification] = await db
-    .update(notificationsTable)
-    .set({ read: true })
-    .where(eq(notificationsTable.id, params.data.id))
-    .returning();
+  const notification = await markNotificationReadById(params.data.id);
 
   if (!notification) {
     res.status(404).json({ error: "Notification not found" });

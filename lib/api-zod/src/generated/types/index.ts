@@ -16,4 +16,5 @@ export * from "./sendNotificationBody";
 export * from "./settings";
 export * from "./stats";
 export * from "./updateSettingsBody";
+export * from "./updateUserBody";
 export * from "./user";

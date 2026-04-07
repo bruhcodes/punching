@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, pushSubscriptionsTable } from "@workspace/db";
-import { randomUUID } from "crypto";
+import {
+  deletePushSubscriptionsByUser,
+  upsertPushSubscriptionRecord,
+} from "../lib/supabase";
 
 const router: IRouter = Router();
 
@@ -16,24 +17,7 @@ router.post("/push/subscribe", async (req, res): Promise<void> => {
     return;
   }
 
-  // Upsert: if this endpoint already exists, update the userId
-  const existing = await db
-    .select()
-    .from(pushSubscriptionsTable)
-    .where(eq(pushSubscriptionsTable.endpoint, subscription.endpoint))
-    .limit(1);
-
-  if (existing.length > 0) {
-    await db
-      .update(pushSubscriptionsTable)
-      .set({ userId })
-      .where(eq(pushSubscriptionsTable.endpoint, subscription.endpoint));
-    res.json({ ok: true });
-    return;
-  }
-
-  await db.insert(pushSubscriptionsTable).values({
-    id: randomUUID(),
+  await upsertPushSubscriptionRecord({
     userId,
     endpoint: subscription.endpoint,
     p256dh: subscription.keys.p256dh,
@@ -49,7 +33,7 @@ router.delete("/push/subscribe", async (req, res): Promise<void> => {
     res.status(400).json({ error: "Missing userId" });
     return;
   }
-  await db.delete(pushSubscriptionsTable).where(eq(pushSubscriptionsTable.userId, userId));
+  await deletePushSubscriptionsByUser(userId);
   res.json({ ok: true });
 });
 

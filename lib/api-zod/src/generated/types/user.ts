@@ -10,6 +10,7 @@ export interface User {
   id: string;
   name: string;
   phone: string;
+  avatarUrl?: string | null;
   punchCount: number;
   totalPunches: number;
   qrCode: string;

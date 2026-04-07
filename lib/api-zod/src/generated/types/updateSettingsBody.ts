@@ -11,4 +11,7 @@ export interface UpdateSettingsBody {
   backgroundStyle?: string;
   progressStyle?: string;
   shopName?: string;
+  backgroundImageUrl?: string;
+  accentColor?: string;
+  welcomeMessage?: string;
 }

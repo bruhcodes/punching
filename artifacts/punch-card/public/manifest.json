@@ -3,15 +3,29 @@
   "short_name": "Punch",
   "description": "Digital punch card for your favorite coffee shop",
   "display": "standalone",
-  "start_url": "/",
+  "start_url": ".",
   "background_color": "#ffffff",
-  "theme_color": "#1a1a1a",
+  "theme_color": "#0f172a",
+  "orientation": "portrait",
+  "scope": ".",
   "icons": [
     {
-      "src": "/favicon.svg",
+      "src": "./favicon.svg",
       "sizes": "192x192 512x1024",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "My Card",
+      "short_name": "Card",
+      "url": "./card"
+    },
+    {
+      "name": "Notifications",
+      "short_name": "Alerts",
+      "url": "./notifications"
     }
   ]
 }

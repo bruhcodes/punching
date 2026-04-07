@@ -12,4 +12,7 @@ export interface Settings {
   backgroundStyle: string;
   progressStyle: string;
   shopName: string;
+  backgroundImageUrl?: string | null;
+  accentColor?: string | null;
+  welcomeMessage?: string | null;
 }

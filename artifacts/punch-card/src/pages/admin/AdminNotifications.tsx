@@ -7,114 +7,145 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { Search } from "lucide-react";
+import { Search, BellRing, SendHorizonal, Sparkles } from "lucide-react";
 import { useDebounceValue } from "./Users";
+
+const templates = [
+  "Double punches today until 5 PM.",
+  "Your next reward is close. Stop by this afternoon.",
+  "Flash deal: show your QR today for a surprise bonus punch.",
+];
 
 export default function AdminNotifications() {
   const [search, setSearch] = useState("");
-  const debouncedSearch = useDebounceValue(search, 300);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
   const [message, setMessage] = useState("");
+  const debouncedSearch = useDebounceValue(search, 300);
 
   const { data: users, isLoading } = useListUsers(
     { search: debouncedSearch || undefined },
     {
-      query: { queryKey: getListUsersQueryKey({ search: debouncedSearch || undefined }) }
-    }
+      query: { queryKey: getListUsersQueryKey({ search: debouncedSearch || undefined }) },
+    },
   );
 
   const sendNotification = useSendNotification();
 
   const toggleUser = (id: string) => {
-    const newSet = new Set(selectedUsers);
-    if (newSet.has(id)) {
-      newSet.delete(id);
-    } else {
-      newSet.add(id);
-    }
-    setSelectedUsers(newSet);
+    const next = new Set(selectedUsers);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelectedUsers(next);
   };
 
   const selectAll = () => {
     if (!users) return;
-    if (selectedUsers.size === users.length) {
-      setSelectedUsers(new Set());
-    } else {
-      setSelectedUsers(new Set(users.map(u => u.id)));
-    }
+    setSelectedUsers(selectedUsers.size === users.length ? new Set() : new Set(users.map((user) => user.id)));
   };
 
   const handleSend = () => {
     if (selectedUsers.size === 0) {
-      toast.error("Please select at least one user");
+      toast.error("Pick at least one user.");
       return;
     }
     if (!message.trim()) {
-      toast.error("Message cannot be empty");
+      toast.error("Write a message first.");
       return;
     }
 
     sendNotification.mutate(
-      { data: { userIds: Array.from(selectedUsers), message } },
+      { data: { userIds: Array.from(selectedUsers), message: message.trim() } },
       {
         onSuccess: () => {
-          toast.success(`Notification sent to ${selectedUsers.size} users`);
+          toast.success(`Saved and sent to ${selectedUsers.size} user${selectedUsers.size === 1 ? "" : "s"}.`);
           setMessage("");
           setSelectedUsers(new Set());
         },
-        onError: () => toast.error("Failed to send notifications")
-      }
+        onError: () => toast.error("Notification failed. Check that the API server is online."),
+      },
     );
   };
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Notifications</h1>
-          <p className="text-muted-foreground mt-1">Send messages and offers to your customers.</p>
+      <div className="space-y-8">
+        <div className="rounded-[2rem] border border-slate-200/80 bg-white/80 p-6 shadow-xl shadow-slate-900/5">
+          <p className="text-xs uppercase tracking-[0.3em] text-cyan-700">Messaging center</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight">Notifications</h1>
+          <p className="mt-2 max-w-3xl text-muted-foreground">
+            Save in-app messages instantly and send web-push alerts to anyone who already enabled notifications on their card.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
+        <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+          <Card className="rounded-[2rem] border-white/70 bg-white/85 shadow-xl shadow-slate-900/5">
             <CardHeader>
-              <CardTitle>Compose Message</CardTitle>
-              <CardDescription>
-                This message will appear in the user's app notifications.
-              </CardDescription>
+              <CardTitle>Compose campaign</CardTitle>
+              <CardDescription>These messages show inside the app even if the user never enabled push.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <Textarea 
-                placeholder="Hey! Double punches today until 5PM! ☕" 
-                className="min-h-[150px] resize-none text-base p-4"
+            <CardContent className="space-y-5">
+              <div className="flex flex-wrap gap-2">
+                {templates.map((template) => (
+                  <Button key={template} variant="outline" size="sm" className="rounded-full" onClick={() => setMessage(template)}>
+                    <Sparkles className="mr-2 h-3.5 w-3.5" />
+                    {template}
+                  </Button>
+                ))}
+              </div>
+
+              <Textarea
+                placeholder="Hey! Double punches today until 5 PM."
+                className="min-h-[170px] resize-none rounded-[1.5rem] p-4 text-base"
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
               />
-              <div className="bg-muted/50 p-4 rounded-xl flex items-center justify-between">
-                <span className="text-sm font-medium">Sending to {selectedUsers.size} users</span>
-                <Button 
-                  onClick={handleSend} 
-                  disabled={selectedUsers.size === 0 || !message.trim() || sendNotification.isPending}
-                >
-                  {sendNotification.isPending ? "Sending..." : "Send Notification"}
-                </Button>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <BellRing className="h-4 w-4 text-cyan-700" />
+                    Audience
+                  </div>
+                  <p className="mt-2 text-2xl font-bold">{selectedUsers.size}</p>
+                  <p className="text-sm text-muted-foreground">selected users</p>
+                </div>
+                <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <SendHorizonal className="h-4 w-4 text-cyan-700" />
+                    Delivery
+                  </div>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    In-app saves immediately. Push alerts only reach people who already enabled notifications.
+                  </p>
+                </div>
               </div>
+
+              <Button
+                onClick={handleSend}
+                className="h-12 w-full rounded-2xl"
+                disabled={selectedUsers.size === 0 || !message.trim() || sendNotification.isPending}
+              >
+                {sendNotification.isPending ? "Sending..." : "Send campaign"}
+              </Button>
             </CardContent>
           </Card>
 
-          <Card className="flex flex-col h-[500px]">
-            <CardHeader className="pb-3 border-b">
-              <div className="flex items-center justify-between mb-4">
-                <CardTitle>Select Recipients</CardTitle>
-                <Button variant="outline" size="sm" onClick={selectAll}>
-                  {users && selectedUsers.size === users.length ? "Deselect All" : "Select All"}
+          <Card className="flex h-[620px] flex-col rounded-[2rem] border-white/70 bg-white/85 shadow-xl shadow-slate-900/5">
+            <CardHeader className="border-b border-slate-100">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <CardTitle>Recipients</CardTitle>
+                  <CardDescription>Select who should get this campaign.</CardDescription>
+                </div>
+                <Button variant="outline" size="sm" className="rounded-full" onClick={selectAll}>
+                  {users && selectedUsers.size === users.length ? "Clear all" : "Select all"}
                 </Button>
               </div>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Search users..." 
-                  className="pl-9"
+              <div className="relative pt-3">
+                <Search className="absolute left-3 top-[26px] h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search users..."
+                  className="rounded-2xl pl-9"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -122,27 +153,27 @@ export default function AdminNotifications() {
             </CardHeader>
             <CardContent className="flex-1 overflow-y-auto p-0">
               {isLoading ? (
-                <div className="p-8 text-center text-muted-foreground">Loading...</div>
+                <div className="p-8 text-center text-muted-foreground">Loading users...</div>
               ) : users && users.length > 0 ? (
-                <div className="divide-y">
-                  {users.map(user => (
-                    <label 
-                      key={user.id} 
-                      className="flex items-center gap-4 p-4 hover:bg-muted/50 cursor-pointer transition-colors"
+                <div className="divide-y divide-slate-100">
+                  {users.map((user) => (
+                    <label
+                      key={user.id}
+                      className="flex cursor-pointer items-center gap-4 p-4 transition-colors hover:bg-slate-50"
                     >
-                      <Checkbox 
-                        checked={selectedUsers.has(user.id)}
-                        onCheckedChange={() => toggleUser(user.id)}
-                      />
-                      <div>
+                      <Checkbox checked={selectedUsers.has(user.id)} onCheckedChange={() => toggleUser(user.id)} />
+                      <div className="min-w-0 flex-1">
                         <div className="font-medium">{user.name}</div>
-                        <div className="text-sm text-muted-foreground">{user.phone}</div>
+                        <div className="truncate text-sm text-muted-foreground">{user.phone}</div>
+                      </div>
+                      <div className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-700">
+                        {user.punchCount} punches
                       </div>
                     </label>
                   ))}
                 </div>
               ) : (
-                <div className="p-8 text-center text-muted-foreground">No users found</div>
+                <div className="p-8 text-center text-muted-foreground">No users found.</div>
               )}
             </CardContent>
           </Card>

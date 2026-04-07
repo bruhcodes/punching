@@ -107,6 +107,54 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserBody"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /users/{id}/punch:
     post:
@@ -316,6 +364,9 @@ components:
           type: string
         phone:
           type: string
+        avatarUrl:
+          type: string
+          nullable: true
         punchCount:
           type: integer
         totalPunches:
@@ -341,9 +392,21 @@ components:
           type: string
         phone:
           type: string
+        avatarUrl:
+          type: string
       required:
         - name
         - phone
+
+    UpdateUserBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        avatarUrl:
+          type: string
 
     Notification:
       type: object
@@ -392,6 +455,15 @@ components:
           type: string
         shopName:
           type: string
+        backgroundImageUrl:
+          type: string
+          nullable: true
+        accentColor:
+          type: string
+          nullable: true
+        welcomeMessage:
+          type: string
+          nullable: true
       required:
         - id
         - stampType
@@ -409,6 +481,12 @@ components:
         progressStyle:
           type: string
         shopName:
+          type: string
+        backgroundImageUrl:
+          type: string
+        accentColor:
+          type: string
+        welcomeMessage:
           type: string
 
     Stats:

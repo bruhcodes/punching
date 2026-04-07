@@ -6,8 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface CreateUserBody {
-  name: string;
-  phone: string;
+export interface UpdateUserBody {
+  name?: string;
+  phone?: string;
   avatarUrl?: string;
 }

@@ -29,6 +29,7 @@ export const ListUsersResponseItem = zod.object({
   id: zod.string(),
   name: zod.string(),
   phone: zod.string(),
+  avatarUrl: zod.string().nullish(),
   punchCount: zod.number(),
   totalPunches: zod.number(),
   qrCode: zod.string(),
@@ -42,6 +43,7 @@ export const ListUsersResponse = zod.array(ListUsersResponseItem);
 export const CreateUserBody = zod.object({
   name: zod.string(),
   phone: zod.string(),
+  avatarUrl: zod.string().optional(),
 });
 
 /**
@@ -55,10 +57,42 @@ export const GetUserResponse = zod.object({
   id: zod.string(),
   name: zod.string(),
   phone: zod.string(),
+  avatarUrl: zod.string().nullish(),
   punchCount: zod.number(),
   totalPunches: zod.number(),
   qrCode: zod.string(),
   createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Update a user
+ */
+export const UpdateUserParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const UpdateUserBody = zod.object({
+  name: zod.string().optional(),
+  phone: zod.string().optional(),
+  avatarUrl: zod.string().optional(),
+});
+
+export const UpdateUserResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  phone: zod.string(),
+  avatarUrl: zod.string().nullish(),
+  punchCount: zod.number(),
+  totalPunches: zod.number(),
+  qrCode: zod.string(),
+  createdAt: zod.coerce.date(),
+});
+
+/**
+ * @summary Delete a user
+ */
+export const DeleteUserParams = zod.object({
+  id: zod.coerce.string(),
 });
 
 /**
@@ -72,6 +106,7 @@ export const AddPunchResponse = zod.object({
   id: zod.string(),
   name: zod.string(),
   phone: zod.string(),
+  avatarUrl: zod.string().nullish(),
   punchCount: zod.number(),
   totalPunches: zod.number(),
   qrCode: zod.string(),
@@ -89,6 +124,7 @@ export const RemovePunchResponse = zod.object({
   id: zod.string(),
   name: zod.string(),
   phone: zod.string(),
+  avatarUrl: zod.string().nullish(),
   punchCount: zod.number(),
   totalPunches: zod.number(),
   qrCode: zod.string(),
@@ -106,6 +142,7 @@ export const ResetPunchesResponse = zod.object({
   id: zod.string(),
   name: zod.string(),
   phone: zod.string(),
+  avatarUrl: zod.string().nullish(),
   punchCount: zod.number(),
   totalPunches: zod.number(),
   qrCode: zod.string(),
@@ -162,6 +199,9 @@ export const GetSettingsResponse = zod.object({
   backgroundStyle: zod.string(),
   progressStyle: zod.string(),
   shopName: zod.string(),
+  backgroundImageUrl: zod.string().nullish(),
+  accentColor: zod.string().nullish(),
+  welcomeMessage: zod.string().nullish(),
 });
 
 /**
@@ -172,6 +212,9 @@ export const UpdateSettingsBody = zod.object({
   backgroundStyle: zod.string().optional(),
   progressStyle: zod.string().optional(),
   shopName: zod.string().optional(),
+  backgroundImageUrl: zod.string().optional(),
+  accentColor: zod.string().optional(),
+  welcomeMessage: zod.string().optional(),
 });
 
 export const UpdateSettingsResponse = zod.object({
@@ -180,6 +223,9 @@ export const UpdateSettingsResponse = zod.object({
   backgroundStyle: zod.string(),
   progressStyle: zod.string(),
   shopName: zod.string(),
+  backgroundImageUrl: zod.string().nullish(),
+  accentColor: zod.string().nullish(),
+  welcomeMessage: zod.string().nullish(),
 });
 
 /**
@@ -195,6 +241,7 @@ export const GetStatsResponse = zod.object({
       id: zod.string(),
       name: zod.string(),
       phone: zod.string(),
+      avatarUrl: zod.string().nullish(),
       punchCount: zod.number(),
       totalPunches: zod.number(),
       qrCode: zod.string(),
