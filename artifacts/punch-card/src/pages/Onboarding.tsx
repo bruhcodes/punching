@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useCreateUser, useHealthCheck, getHealthCheckQueryKey } from "@workspace/api-client-react";
+import { useCreateUser, useHealthCheck, getHealthCheckQueryKey, listUsers } from "@workspace/api-client-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "@/hooks/use-toast";
 
@@ -94,17 +94,7 @@ export default function Onboarding() {
     setLookingUp(true);
 
     try {
-      // Search users by phone using the backend's search param (proxied via /api)
-      const response = await fetch(
-        `/api/users?search=${encodeURIComponent(phone.trim())}`,
-        { headers: { Accept: "application/json" } }
-      );
-      if (!response.ok) {
-        setFormError("Server error. Please try again in a moment.");
-        setLookingUp(false);
-        return;
-      }
-      const users = await response.json();
+      const users = await listUsers({ search: phone.trim() });
       // Exact match on digits-only comparison for accuracy
       const normalized = phone.replace(/\D/g, "");
       const match = Array.isArray(users)

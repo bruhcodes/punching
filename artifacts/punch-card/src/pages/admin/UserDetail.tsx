@@ -1,5 +1,5 @@
 import { useRoute } from "wouter";
-import { useGetUser, getGetUserQueryKey, useAddPunch, useRemovePunch, useResetPunches, useGetSettings, getGetSettingsQueryKey, getGetStatsQueryKey, getListUsersQueryKey, useListNotifications } from "@workspace/api-client-react";
+import { useGetUser, getGetUserQueryKey, useAddPunch, useRemovePunch, useResetPunches, useGetSettings, getGetSettingsQueryKey, getGetStatsQueryKey, getListUsersQueryKey, useListNotifications, useUpdateUser } from "@workspace/api-client-react";
 import { AdminLayout } from "@/components/layout/Layouts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,6 +40,7 @@ export default function AdminUserDetail() {
   const addPunch = useAddPunch();
   const removePunch = useRemovePunch();
   const resetPunches = useResetPunches();
+  const updateUser = useUpdateUser();
 
   const refreshUserData = (data: unknown) => {
     queryClient.setQueryData(getGetUserQueryKey(userId), data);
@@ -79,23 +80,17 @@ export default function AdminUserDetail() {
     });
   };
 
-  const handleUpdateTotalPunches = async (newTotal: string) => {
-    try {
-      const res = await fetch(`/api/users/${userId}`, {
-        method: "PATCH",
-        headers: { 
-          "Content-Type": "application/json",
-          "x-admin-password": sessionStorage.getItem("admin-password") || ""
-        },
-        body: JSON.stringify({ totalPunches: Number(newTotal) })
-      });
-      if (!res.ok) throw new Error("Failed to update");
-      const data = await res.json();
-      refreshUserData(data);
-      toast.success(`Reward threshold updated to ${newTotal}`);
-    } catch {
-      toast.error("Failed to update reward threshold");
-    }
+  const handleUpdateTotalPunches = (newTotal: string) => {
+    updateUser.mutate({
+      id: userId,
+      data: { totalPunches: Number(newTotal) }
+    }, {
+      onSuccess: (data) => {
+        refreshUserData(data);
+        toast.success(`Reward threshold updated to ${newTotal}`);
+      },
+      onError: () => toast.error("Failed to update reward threshold")
+    });
   };
 
   if (isLoading || !user) {
