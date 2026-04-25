@@ -461,8 +461,9 @@ export default function Onboarding() {
           Earn 1 punch per visit · 10 punches = 1 free drink
         </motion.p>
 
-        <p style={{ textAlign: "center", fontSize: 9, color: "#cbd5e1", marginTop: 8 }}>
-          Debug API: {import.meta.env.VITE_API_BASE_URL || "Auto (Proxy)"}
+        <p style={{ textAlign: "center", fontSize: 14, color: "#ef4444", marginTop: 20, fontWeight: "bold", border: "2px dashed #ef4444", padding: "10px", borderRadius: "10px" }}>
+          DEBUG MODE ACTIVE<br/>
+          API: {import.meta.env.VITE_API_BASE_URL || "Auto (Proxy)"}
         </p>
       </motion.div>
     </div>
