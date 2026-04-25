@@ -59,19 +59,22 @@ export default function Onboarding() {
         },
         onError: (error) => {
           let message = "We couldn't create your card yet.";
-          const apiError = error as { status?: number; data?: unknown };
-          if (typeof apiError.status === "number") {
+          const apiError = error as { status?: number; data?: unknown; message?: string };
+          
+          if (apiError.message === "Failed to fetch") {
+            message = "Network Error: The app can't reach your Railway server. Check VITE_API_BASE_URL.";
+          } else if (typeof apiError.status === "number") {
             if (apiError.status === 409) {
               message = "That phone number already has a card. Try signing in instead.";
             } else if (apiError.status >= 500) {
-              message = "The server is on, but the database isn't ready yet.";
+              message = `Server Error (${apiError.status}): The database might be missing a column.`;
             } else if (
               typeof apiError.data === "object" &&
               apiError.data &&
               "error" in apiError.data
             ) {
               const m = (apiError.data as { error?: string }).error;
-              if (m) message = m;
+              if (m) message = `API Error: ${m}`;
             }
           }
           setFormError(message);
@@ -457,6 +460,10 @@ export default function Onboarding() {
         >
           Earn 1 punch per visit · 10 punches = 1 free drink
         </motion.p>
+
+        <p style={{ textAlign: "center", fontSize: 9, color: "#cbd5e1", marginTop: 8 }}>
+          Debug API: {import.meta.env.VITE_API_BASE_URL || "Auto (Proxy)"}
+        </p>
       </motion.div>
     </div>
   );
