@@ -113,9 +113,16 @@ router.get("/users/:id", async (req, res): Promise<void> => {
 });
 
 router.patch("/users/:id", async (req, res): Promise<void> => {
+  const body = parseUpdateUserBody(req.body);
+  if (body?.totalPunches !== undefined) {
+    const adminPassword = req.headers["x-admin-password"];
+    if (adminPassword !== "12345") {
+      res.status(401).json({ error: "Unauthorized: Invalid admin password" });
+      return;
+    }
+  }
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = GetUserParams.safeParse({ id: raw });
-  const body = parseUpdateUserBody(req.body);
 
   if (!params.success || !body) {
     res.status(400).json({ error: params.success ? "Invalid request body" : params.error.message });
@@ -164,6 +171,11 @@ router.delete("/users/:id", async (req, res): Promise<void> => {
 });
 
 router.post("/users/:id/punch", async (req, res): Promise<void> => {
+  const adminPassword = req.headers["x-admin-password"];
+  if (adminPassword !== "12345") {
+    res.status(401).json({ error: "Unauthorized: Invalid admin password" });
+    return;
+  }
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = AddPunchParams.safeParse({ id: raw });
   if (!params.success) {
@@ -197,6 +209,11 @@ router.post("/users/:id/punch", async (req, res): Promise<void> => {
 });
 
 router.post("/users/:id/remove-punch", async (req, res): Promise<void> => {
+  const adminPassword = req.headers["x-admin-password"];
+  if (adminPassword !== "12345") {
+    res.status(401).json({ error: "Unauthorized: Invalid admin password" });
+    return;
+  }
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = RemovePunchParams.safeParse({ id: raw });
   if (!params.success) {
@@ -217,6 +234,11 @@ router.post("/users/:id/remove-punch", async (req, res): Promise<void> => {
 });
 
 router.post("/users/:id/reset", async (req, res): Promise<void> => {
+  const adminPassword = req.headers["x-admin-password"];
+  if (adminPassword !== "12345") {
+    res.status(401).json({ error: "Unauthorized: Invalid admin password" });
+    return;
+  }
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = ResetPunchesParams.safeParse({ id: raw });
   if (!params.success) {

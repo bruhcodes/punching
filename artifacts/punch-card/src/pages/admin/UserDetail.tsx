@@ -83,7 +83,10 @@ export default function AdminUserDetail() {
     try {
       const res = await fetch(`/api/users/${userId}`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "x-admin-password": sessionStorage.getItem("admin-password") || ""
+        },
         body: JSON.stringify({ totalPunches: Number(newTotal) })
       });
       if (!res.ok) throw new Error("Failed to update");

@@ -1,6 +1,6 @@
 [build]
 command = "corepack pnpm@9.0.0 install --frozen-lockfile && corepack pnpm@9.0.0 --filter @workspace/punch-card run build"
-publish = "artifacts/punch-card/dist/public"
+publish = "artifacts/punch-card/dist"
 
 [build.environment]
 NODE_VERSION = "22"

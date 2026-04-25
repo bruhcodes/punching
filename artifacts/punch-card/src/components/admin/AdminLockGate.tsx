@@ -26,6 +26,7 @@ export function AdminLockGate({ children }: { children: React.ReactNode }) {
     }
 
     sessionStorage.setItem(ADMIN_SESSION_KEY, "true");
+    sessionStorage.setItem("admin-password", password);
     setUnlocked(true);
     setError("");
   };
