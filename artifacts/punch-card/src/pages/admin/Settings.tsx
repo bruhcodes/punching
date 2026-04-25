@@ -231,6 +231,15 @@ export default function AdminSettings() {
             <Button className="h-12 w-full rounded-2xl text-base" onClick={handleSave} disabled={updateSettings.isPending || pristine}>
               {updateSettings.isPending ? "Saving..." : "Save settings"}
             </Button>
+
+            {/* Admin Debug Info */}
+            <div className="mt-8 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">System Connection Debug</p>
+              <div className="mt-2 space-y-1 text-xs text-slate-500">
+                <p><strong>API Server:</strong> {import.meta.env.VITE_API_BASE_URL || "Local (Proxy)"}</p>
+                <p><strong>Push Notifications:</strong> {import.meta.env.VITE_VAPID_PUBLIC_KEY ? "✅ Configured" : "❌ Public Key Missing"}</p>
+              </div>
+            </div>
           </div>
 
           {/* Live preview sidebar */}
