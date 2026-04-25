@@ -8,75 +8,34 @@ import {
   useListNotifications,
   getListNotificationsQueryKey,
 } from "@workspace/api-client-react";
-import { MobileLayout } from "@/components/layout/Layouts";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Bell, BellOff, Gift, Sparkles, TicketPercent } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Bell, BellOff, Crown, Gift } from "lucide-react";
 import { toast } from "sonner";
+import {
+  hasActivePushSubscription,
+  isIosDevice,
+  isStandaloneDisplay,
+  sendTestPush,
+  subscribeToPush,
+  supportsWebPush,
+  unsubscribeFromPush,
+} from "@/lib/push";
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
-  for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
-  }
-  return outputArray;
-}
-
-async function subscribeToPush(userId: string): Promise<boolean> {
-  try {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
-    const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
-    if (!vapidKey) return false;
-
-    const reg = await navigator.serviceWorker.ready;
-    let sub = await reg.pushManager.getSubscription();
-
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey) as BufferSource,
-      });
-    }
-
-    await fetch("/api/push/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, subscription: sub.toJSON() }),
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function unsubscribeFromPush(userId: string): Promise<void> {
-  try {
-    if (!("serviceWorker" in navigator)) return;
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
-    if (sub) await sub.unsubscribe();
-    await fetch("/api/push/subscribe", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId }),
-    });
-  } catch {
-    // Ignore unsubscribe errors so the UI can still recover.
-  }
-}
-
-async function hasActivePushSubscription(): Promise<boolean> {
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return false;
-  const reg = await navigator.serviceWorker.ready;
-  const sub = await reg.pushManager.getSubscription();
-  return !!sub;
-}
+type PremiumSettings = {
+  heroBadge?: string | null;
+  rewardLabel?: string | null;
+  dealLabel?: string | null;
+  adBannerText?: string | null;
+  cardStyle?: string | null;
+  accentColor?: string | null;
+  backgroundStyle?: string | null;
+  backgroundImageUrl?: string | null;
+  shopName?: string | null;
+  stampType?: string | null;
+  welcomeMessage?: string | null;
+};
 
 export default function PunchCard() {
   const [location, setLocation] = useLocation();
@@ -85,6 +44,7 @@ export default function PunchCard() {
   const [subscribed, setSubscribed] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [sendingTestPush, setSendingTestPush] = useState(false);
 
   useEffect(() => {
     if (!userId && location !== "/onboarding" && location !== "/") {
@@ -97,19 +57,13 @@ export default function PunchCard() {
       if ("Notification" in window) {
         setNotifPermission(Notification.permission);
       }
-
-      setIsStandalone(
-        window.matchMedia("(display-mode: standalone)").matches ||
-          (window.navigator as Navigator & { standalone?: boolean }).standalone === true,
-      );
-
+      setIsStandalone(isStandaloneDisplay());
       try {
         setSubscribed(await hasActivePushSubscription());
       } catch {
         setSubscribed(false);
       }
     };
-
     void syncNotificationState();
   }, []);
 
@@ -123,7 +77,7 @@ export default function PunchCard() {
     },
   });
 
-  const { data: settings, isLoading: isLoadingSettings } = useGetSettings({
+  const { data: rawSettings, isLoading: isLoadingSettings } = useGetSettings({
     query: {
       queryKey: getGetSettingsQueryKey(),
       refetchInterval: 800,
@@ -131,6 +85,7 @@ export default function PunchCard() {
       refetchOnMount: "always",
     },
   });
+  const settings = rawSettings as (typeof rawSettings & PremiumSettings) | undefined;
 
   const { data: notifications } = useListNotifications(
     { userId: userId || "" },
@@ -144,7 +99,6 @@ export default function PunchCard() {
 
   const handleEnableNotifications = useCallback(async () => {
     if (!userId) return;
-
     setSubscribing(true);
     try {
       const permission = await Notification.requestPermission();
@@ -153,14 +107,12 @@ export default function PunchCard() {
         toast.error("Notification permission was not granted");
         return;
       }
-
-      const ok = await subscribeToPush(userId);
-      setSubscribed(ok);
-
-      if (ok) {
+      const result = await subscribeToPush(userId);
+      setSubscribed(result.ok);
+      if (result.ok) {
         toast.success("Push notifications are on");
       } else {
-        toast.error("Push setup failed. Check VAPID keys and service worker setup.");
+        toast.error(result.error || "Push setup failed.");
       }
     } finally {
       setSubscribing(false);
@@ -169,7 +121,6 @@ export default function PunchCard() {
 
   const handleDisableNotifications = useCallback(async () => {
     if (!userId) return;
-
     setSubscribing(true);
     try {
       await unsubscribeFromPush(userId);
@@ -180,16 +131,47 @@ export default function PunchCard() {
     }
   }, [userId]);
 
+  const handleSendTestPush = useCallback(async () => {
+    if (!userId) return;
+    setSendingTestPush(true);
+    try {
+      const result = await sendTestPush(userId);
+      if (result.ok) {
+        toast.success("Test push sent!");
+      } else {
+        toast.error(result.error || "Could not send test push.");
+      }
+    } finally {
+      setSendingTestPush(false);
+    }
+  }, [userId]);
+
+  useEffect(() => {
+    // Automatically prompt for push notifications on load if not already requested
+    if (userId && "Notification" in window && Notification.permission === "default" && !subscribing) {
+      handleEnableNotifications();
+    }
+  }, [userId, subscribing, handleEnableNotifications]);
+
   if (!userId) return null;
 
   if (isLoadingUser || isLoadingSettings) {
     return (
-      <MobileLayout title="Loading...">
-        <div className="space-y-6">
-          <Skeleton className="h-[240px] w-full rounded-3xl" />
-          <Skeleton className="h-[300px] w-full rounded-3xl" />
-        </div>
-      </MobileLayout>
+      <div
+        style={{
+          minHeight: "100dvh",
+          background: "linear-gradient(180deg, #0f172a 0%, #1e293b 100%)",
+          display: "flex",
+          flexDirection: "column",
+          padding: "24px 20px",
+          gap: 16,
+        }}
+      >
+        <Skeleton className="h-16 w-full rounded-2xl" style={{ background: "rgba(255,255,255,0.06)" }} />
+        <Skeleton className="h-48 w-full rounded-3xl" style={{ background: "rgba(255,255,255,0.06)" }} />
+        <Skeleton className="h-40 w-full rounded-3xl" style={{ background: "rgba(255,255,255,0.06)" }} />
+        <Skeleton className="h-52 w-full rounded-3xl" style={{ background: "rgba(255,255,255,0.06)" }} />
+      </div>
     );
   }
 
@@ -200,299 +182,462 @@ export default function PunchCard() {
   const punchesLeft = Math.max(totalSlots - user.punchCount, 0);
   const dealProgress = Math.min((user.punchCount / totalSlots) * 100, 100);
   const unreadNotifications = notifications?.filter((item) => !item.read).length ?? 0;
-  const latestMessages = notifications?.slice(0, 2) ?? [];
-  const featuredDeal =
-    user.punchCount >= totalSlots
-      ? "Reward unlocked: show this screen and claim your free drink."
+  const rewardLabel = settings.rewardLabel || "Free drink";
+  const dealLabel = settings.dealLabel || "Today's Offer";
+  const adBannerText = settings.welcomeMessage ||
+    (user.punchCount >= totalSlots
+      ? "🎉 Reward unlocked! Show this screen to the barista."
       : punchesLeft <= 2
-        ? `Almost there: only ${punchesLeft} more punch${punchesLeft === 1 ? "" : "es"} for your reward.`
-        : "Today's deal: ask in-store about double-punch hours and surprise offers.";
+        ? `Almost there — only ${punchesLeft} more punch${punchesLeft === 1 ? "" : "es"} for your reward!`
+        : "Ask about double-punch hours and surprise offers in store.");
+
   const memberTier =
     user.punchCount >= 8 ? "Gold member" : user.punchCount >= 4 ? "Silver member" : "Starter member";
 
   const getStampIcon = () => {
     switch (settings.stampType) {
-      case "coffee":
-        return "☕";
-      case "boba":
-        return "🧋";
-      case "heart":
-        return "❤️";
-      case "star":
-      default:
-        return "⭐";
+      case "coffee": return "☕";
+      case "boba": return "🧋";
+      case "heart": return "❤️";
+      case "icecream": return "🍦";
+      case "bean": return "🫘";
+      case "sparkle": return "✨";
+      case "logo": return <img src="/logo.png" style={{ width: "70%", height: "70%", objectFit: "contain" }} alt="logo" />;
+      case "star": default: return "⭐";
     }
   };
 
-  const supportsNotifications =
-    "Notification" in window &&
-    "serviceWorker" in navigator &&
-    "PushManager" in window;
-  const accentColor = settings.accentColor || "#111827";
-  const accentSoft = `${accentColor}22`;
-  const accentBorder = `${accentColor}55`;
-  const backgroundSurface =
-    settings.backgroundStyle === "sunset"
-      ? "linear-gradient(180deg, rgba(255,237,213,0.95) 0%, rgba(255,228,230,0.95) 100%)"
-      : settings.backgroundStyle === "ocean"
-        ? "linear-gradient(180deg, rgba(236,254,255,0.95) 0%, rgba(224,242,254,0.98) 100%)"
-        : settings.backgroundStyle === "midnight"
-          ? "linear-gradient(180deg, rgba(15,23,42,0.98) 0%, rgba(30,41,59,0.98) 100%)"
-          : "rgba(255,255,255,0.72)";
-  const backgroundTextColor = settings.backgroundStyle === "midnight" ? "#f8fafc" : undefined;
-  const heroStyle = settings.backgroundImageUrl
-    ? {
-        backgroundImage: `linear-gradient(135deg, rgba(15,23,42,0.62), rgba(15,23,42,0.2)), url(${settings.backgroundImageUrl})`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }
-    : settings.backgroundStyle === "sunset"
-      ? { backgroundImage: "linear-gradient(135deg, #fdba74 0%, #fb7185 100%)" }
-      : settings.backgroundStyle === "ocean"
-        ? { backgroundImage: "linear-gradient(135deg, #67e8f9 0%, #0ea5e9 100%)" }
-        : settings.backgroundStyle === "midnight"
-          ? { backgroundImage: "linear-gradient(135deg, #0f172a 0%, #334155 100%)" }
-          : undefined;
+  const accentColor = settings.accentColor || "#06b6d4";
+  const supportsNotifications = supportsWebPush();
+  const needsInstallForIosPush = isIosDevice() && !isStandalone;
+
+  // Background gradient from settings
+  const pageBg = "#f8fafc";
+
+  // Card gradient
+  const cardBg = "linear-gradient(135deg, #38bdf8 0%, #a855f7 100%)";
 
   return (
-    <MobileLayout title={settings.shopName || "Your Card"}>
-      <div className="space-y-8 rounded-[2.25rem] p-3 pt-4" style={{ background: backgroundSurface, color: backgroundTextColor }}>
-        <div className="space-y-3 rounded-[2rem] border border-primary/10 bg-white/70 p-5 shadow-sm" style={{ ...heroStyle, color: backgroundTextColor }}>
-          <div>
-            <h2 className="text-2xl font-semibold">Hi, {user.name.split(" ")[0]}</h2>
-            <p className="text-muted-foreground">{user.punchCount} out of {totalSlots} punches</p>
-            {settings.welcomeMessage ? (
-              <p className="mt-2 text-sm text-muted-foreground">{settings.welcomeMessage}</p>
-            ) : null}
-          </div>
-          <div className="flex items-center justify-between rounded-3xl border border-primary/10 bg-primary/5 px-4 py-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em]" style={{ color: accentColor }}>Member status</p>
-              <p className="text-sm font-semibold">{memberTier}</p>
-            </div>
-            <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold shadow-sm" style={{ color: accentColor }}>
-              {unreadNotifications} new alerts
-            </div>
-          </div>
-        </div>
-
-        <motion.div
-          initial={{ scale: 0.95, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        >
-          <Card
-            className="overflow-hidden rounded-[2rem] border-none shadow-xl"
+    <div
+      style={{
+        minHeight: "100dvh",
+        background: settings.backgroundImageUrl
+          ? `linear-gradient(180deg, rgba(248,250,252,0.92) 0%, rgba(248,250,252,0.85) 100%), url(${settings.backgroundImageUrl}) center/cover`
+          : pageBg,
+        display: "flex",
+        flexDirection: "column",
+        overflowY: "auto",
+      }}
+    >
+      {/* Top Header */}
+      <header
+        style={{
+          padding: "16px 20px 12px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          borderBottom: "1px solid rgba(0,0,0,0.05)",
+          background: "rgba(255,255,255,0.7)",
+          backdropFilter: "blur(20px)",
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+        }}
+      >
+        <div>
+          <p style={{ fontSize: 10, letterSpacing: "0.35em", textTransform: "uppercase", color: accentColor, margin: 0 }}>
+            Loyalty Pass
+          </p>
+          <h1
             style={{
-              background: settings.backgroundImageUrl
-                ? `linear-gradient(135deg, rgba(15,23,42,0.78) 0%, rgba(15,23,42,0.35) 100%), linear-gradient(135deg, ${accentColor}cc 0%, ${accentColor}55 100%)`
-                : `linear-gradient(135deg, ${accentColor} 0%, ${accentColor}bb 58%, ${accentColor}77 100%)`,
+              fontSize: 18,
+              fontWeight: 700,
+              color: "#0f172a",
+              margin: 0,
+              letterSpacing: "-0.02em",
+              fontFamily: "var(--app-font-serif, serif)",
             }}
           >
-            <CardContent className="p-8">
-              <div className="grid grid-cols-5 gap-3 sm:gap-4">
+            {settings.shopName || "Cool Spot"}
+          </h1>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {unreadNotifications > 0 && (
+            <div
+              style={{
+                padding: "4px 10px",
+                borderRadius: 20,
+                background: `${accentColor}22`,
+                border: `1px solid ${accentColor}44`,
+                fontSize: 12,
+                fontWeight: 600,
+                color: accentColor,
+              }}
+            >
+              {unreadNotifications} new
+            </div>
+          )}
+          <button
+            onClick={() => setLocation("/notifications")}
+            style={{
+              background: "rgba(0,0,0,0.04)",
+              border: "1px solid rgba(0,0,0,0.08)",
+              borderRadius: 12,
+              padding: "8px",
+              cursor: "pointer",
+              color: "#64748b",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              position: "relative",
+            }}
+          >
+            <Bell style={{ width: 18, height: 18 }} />
+            {unreadNotifications > 0 && (
+              <span
+                style={{
+                  position: "absolute",
+                  top: 6,
+                  right: 6,
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: "#ef4444",
+                  border: "2px solid #ffffff",
+                }}
+              />
+            )}
+          </button>
+        </div>
+      </header>
+
+      <div style={{ flex: 1, padding: "20px", display: "flex", flexDirection: "column", gap: 0 }}>
+
+        {/* Hero greeting */}
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ marginBottom: 20 }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 14,
+                background: `linear-gradient(135deg, ${accentColor}15, ${accentColor}05)`,
+                border: `1px solid ${accentColor}22`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 18,
+              }}
+            >
+              {getStampIcon()}
+            </div>
+            <div>
+              <p style={{ margin: 0, fontSize: 22, fontWeight: 700, color: "#0f172a", letterSpacing: "-0.02em" }}>
+                Hi, {user.name.split(" ")[0]}!
+              </p>
+              <p style={{ margin: 0, fontSize: 13, color: "#64748b" }}>
+                {user.punchCount} of {totalSlots} punches · <span style={{ color: accentColor }}>{memberTier}</span>
+              </p>
+            </div>
+            <div style={{ marginLeft: "auto" }}>
+              <div
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: 20,
+                  background: `${accentColor}10`,
+                  border: `1px solid ${accentColor}22`,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: accentColor,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {punchesLeft === 0 ? "🎉 Reward!" : `${punchesLeft} left`}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Punch Card + QR — unified section */}
+        <motion.div
+          initial={{ opacity: 0, y: 16, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: "spring", stiffness: 280, damping: 24, delay: 0.05 }}
+          style={{
+            borderRadius: 28,
+            overflow: "hidden",
+            boxShadow: `0 32px 80px -24px rgba(168,85,247,0.3), 0 8px 32px -8px rgba(0,0,0,0.1)`,
+            marginBottom: 16,
+          }}
+        >
+          {/* Card top — punch stamps */}
+          <div
+            style={{
+              background: cardBg,
+              padding: "24px 24px 20px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 18 }}>
+              <div>
+                <p style={{ margin: 0, fontSize: 10, letterSpacing: "0.3em", textTransform: "uppercase", color: "rgba(255,255,255,0.5)" }}>
+                  Signature pass
+                </p>
+                <p
+                  style={{
+                    margin: "4px 0 0",
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: "#ffffff",
+                    fontFamily: "var(--app-font-serif, serif)",
+                    letterSpacing: "-0.02em",
+                  }}
+                >
+                  {rewardLabel}
+                </p>
+              </div>
+              <Crown style={{ width: 22, height: 22, color: "rgba(255,255,255,0.4)" }} />
+            </div>
+
+            {/* Stamp grid or Reward Unlocked */}
+            {punchesLeft === 0 ? (
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                style={{ textAlign: "center", padding: "30px 10px", background: "rgba(255,255,255,0.1)", borderRadius: 24, border: "1px solid rgba(255,255,255,0.2)" }}
+              >
+                <div style={{ fontSize: 56, marginBottom: 12 }}>🎉</div>
+                <h2 style={{ color: "white", fontSize: 24, fontWeight: 800, margin: 0, fontFamily: "var(--app-font-serif, serif)" }}>
+                  Collect your free drink!
+                </h2>
+                <p style={{ color: "rgba(255,255,255,0.8)", marginTop: 8, fontSize: 13, lineHeight: 1.4 }}>
+                  Show this screen and scan your QR code below to claim your reward.
+                </p>
+              </motion.div>
+            ) : (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10 }}>
                 {stamps.map((isStamped, index) => (
                   <div
                     key={index}
                     data-testid={`stamp-slot-${index}`}
-                    className="relative flex aspect-square items-center justify-center overflow-hidden rounded-full shadow-sm"
                     style={{
-                      background: isStamped ? "rgba(255,255,255,0.18)" : "rgba(255,255,255,0.1)",
-                      border: `1px solid ${isStamped ? "rgba(255,255,255,0.28)" : "rgba(255,255,255,0.16)"}`,
+                      aspectRatio: "1",
+                      borderRadius: "50%",
+                      background: isStamped ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.07)",
+                      border: `1px solid ${isStamped ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.12)"}`,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: 20,
+                      transition: "all 0.3s",
+                      boxShadow: isStamped ? `0 4px 16px -4px ${accentColor}80` : "none",
                     }}
                   >
                     <AnimatePresence>
                       {isStamped && (
-                        <motion.div
-                          initial={{ scale: 0.92, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1, rotate: 0 }}
-                          transition={{ duration: 0.08, ease: "easeOut" }}
-                          className="absolute inset-0 flex items-center justify-center text-2xl"
-                          style={{ backgroundColor: "rgba(255,255,255,0.22)" }}
+                        <motion.span
+                          initial={{ scale: 0, rotate: -20 }}
+                          animate={{ scale: 1, rotate: 0 }}
+                          exit={{ scale: 0 }}
+                          transition={{ type: "spring", stiffness: 400, damping: 20 }}
                         >
                           {getStampIcon()}
-                        </motion.div>
+                        </motion.span>
                       )}
                     </AnimatePresence>
                   </div>
                 ))}
               </div>
+            )}
 
-              <div className="mt-8 text-center text-sm font-medium text-white">
-                {user.punchCount >= totalSlots
-                  ? "Free drink earned! Show to barista."
-                  : `${totalSlots - user.punchCount} more to a free drink`}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.1 }}
-          className="flex flex-col items-center space-y-4 pt-4"
-        >
-          <p className="text-sm font-medium uppercase tracking-widest text-muted-foreground">Scan to punch</p>
-          <div className="rounded-2xl border bg-white p-4 shadow-sm">
-            <QRCodeSVG value={user.id} size={180} level="M" />
-          </div>
-          <p className="text-xs text-muted-foreground">{user.id.substring(0, 8)}...</p>
-          <div className="w-full rounded-[1.75rem] border border-amber-300/40 bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-amber-700">Deal bar</p>
-                <p className="mt-2 text-sm font-semibold text-slate-900">{featuredDeal}</p>
-              </div>
-              <div className="rounded-2xl bg-white/80 px-3 py-2 text-right shadow-sm">
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Reward pace</p>
-                <p className="text-lg font-bold text-slate-900">{Math.round(dealProgress)}%</p>
-              </div>
-            </div>
-            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/80">
+            {/* Progress bar */}
+            <div style={{ marginTop: 18 }}>
               <div
-                className="h-full rounded-full transition-all"
                 style={{
-                  width: `${Math.max(dealProgress, 8)}%`,
-                  background: `linear-gradient(90deg, ${accentColor} 0%, ${accentColor}cc 100%)`,
+                  height: 4,
+                  borderRadius: 4,
+                  background: "rgba(255,255,255,0.2)",
+                  overflow: "hidden",
                 }}
-              />
+              >
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${Math.max(dealProgress, 4)}%` }}
+                  transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
+                  style={{
+                    height: "100%",
+                    borderRadius: 4,
+                    background: "linear-gradient(90deg, rgba(255,255,255,0.6), rgba(255,255,255,0.9))",
+                  }}
+                />
+              </div>
+              <p style={{ margin: "8px 0 0", fontSize: 12, color: "rgba(255,255,255,0.5)", textAlign: "center" }}>
+                {punchesLeft === 0
+                  ? `${rewardLabel} unlocked — show to the barista ✓`
+                  : `${punchesLeft} more to unlock ${rewardLabel.toLowerCase()}`}
+              </p>
             </div>
-            <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
-              <span>{user.punchCount} punches collected</span>
-              <span>{punchesLeft === 0 ? "Ready to redeem" : `${punchesLeft} left to go`}</span>
+          </div>
+
+          {/* Divider with scan label */}
+          <div
+            style={{
+              background: "#ffffff",
+              borderTop: "1px solid #f1f5f9",
+              borderBottom: "1px solid #f1f5f9",
+              padding: "10px 24px",
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            <div style={{ flex: 1, height: 1, background: "#f1f5f9" }} />
+            <p
+              style={{
+                margin: 0,
+                fontSize: 10,
+                letterSpacing: "0.3em",
+                textTransform: "uppercase",
+                color: accentColor,
+                fontWeight: 600,
+              }}
+            >
+              Scan to Punch
+            </p>
+            <div style={{ flex: 1, height: 1, background: "#f1f5f9" }} />
+          </div>
+
+          {/* QR Code section */}
+          <div
+            style={{
+              background: "#ffffff",
+              padding: "24px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 20,
+                background: "#ffffff",
+                boxShadow: `0 8px 40px -8px ${accentColor}44`,
+              }}
+            >
+              <QRCodeSVG value={user.id} size={160} level="M" />
             </div>
+            <p style={{ margin: 0, fontSize: 11, color: "#475569", letterSpacing: "0.05em" }}>
+              {user.id.substring(0, 8).toUpperCase()}···
+            </p>
           </div>
         </motion.div>
 
+        {/* Ad Banner — editable from admin */}
         <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.15 }}
-          className="grid gap-4 sm:grid-cols-3"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12 }}
+          style={{
+            borderRadius: 20,
+            overflow: "hidden",
+            background: "#ffffff",
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 12px 32px -12px rgba(0,0,0,0.05)",
+            marginBottom: 16,
+          }}
         >
-          <Card className="rounded-3xl border-none bg-slate-900 text-white shadow-lg">
-            <CardContent className="flex items-center gap-3 p-5">
-              <Gift className="h-5 w-5 text-amber-300" />
-              <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-slate-300">Next reward</p>
-                <p className="text-sm font-semibold">{punchesLeft === 0 ? "Free drink ready" : `${punchesLeft} punches left`}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-3xl border border-primary/10 bg-white/80 shadow-sm">
-            <CardContent className="flex items-center gap-3 p-5">
-              <Sparkles className="h-5 w-5" style={{ color: accentColor }} />
-              <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Surprise perk</p>
-                <p className="text-sm font-semibold">Scan in store for flash promos</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="rounded-3xl border border-primary/10 bg-white/80 shadow-sm">
-            <CardContent className="flex items-center gap-3 p-5">
-              <TicketPercent className="h-5 w-5 text-rose-500" />
-              <div>
-                <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">Install bonus</p>
-                <p className="text-sm font-semibold">{isStandalone ? "Home screen ready" : "Add to home screen for alerts"}</p>
-              </div>
-            </CardContent>
-          </Card>
+          <div
+            style={{
+              padding: "16px 20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 12,
+            }}
+          >
+            <div style={{ flex: 1 }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 10,
+                  letterSpacing: "0.3em",
+                  textTransform: "uppercase",
+                  color: accentColor,
+                  fontWeight: 700,
+                  marginBottom: 6,
+                }}
+              >
+                {dealLabel}
+              </p>
+              <p style={{ margin: 0, fontSize: 14, color: "#334155", fontWeight: 500, lineHeight: 1.5 }}>
+                {adBannerText}
+              </p>
+            </div>
+            <div
+              style={{
+                minWidth: 56,
+                textAlign: "center",
+                padding: "8px",
+                borderRadius: 14,
+                background: `${accentColor}15`,
+                border: `1px solid ${accentColor}30`,
+              }}
+            >
+              <p style={{ margin: 0, fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.1em" }}>Progress</p>
+              <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: accentColor }}>
+                {Math.round(dealProgress)}%
+              </p>
+            </div>
+          </div>
+
+          {/* Progress bar */}
+          <div style={{ height: 3, background: "#f1f5f9" }}>
+            <div
+              style={{
+                height: "100%",
+                width: `${Math.max(dealProgress, 3)}%`,
+                background: `linear-gradient(90deg, ${accentColor}, ${accentColor}aa)`,
+                transition: "width 0.8s ease",
+              }}
+            />
+          </div>
         </motion.div>
 
-        {supportsNotifications && (
-          <motion.div
-            initial={{ y: 20, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card className="rounded-2xl border shadow-sm">
-              <CardContent className="space-y-4 p-5">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    {subscribed ? (
-                      <Bell className="h-5 w-5" style={{ color: accentColor }} />
-                    ) : (
-                      <BellOff className="h-5 w-5 text-muted-foreground" />
-                    )}
-                    <div>
-                      <p className="text-sm font-medium">
-                        {subscribed ? "Notifications on" : "Enable notifications"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {subscribed
-                          ? "You can receive reward alerts, even while the app is closed."
-                          : "Turn on push to get rewards, flash deals, and admin messages."}
-                      </p>
-                    </div>
-                  </div>
-                  {subscribed ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleDisableNotifications}
-                      disabled={subscribing}
-                      data-testid="button-disable-notifications"
-                    >
-                      Turn off
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      onClick={handleEnableNotifications}
-                      disabled={subscribing || notifPermission === "denied"}
-                      data-testid="button-enable-notifications"
-                    >
-                      {subscribing ? "Enabling..." : "Enable"}
-                    </Button>
-                  )}
-                </div>
-                <div className="rounded-2xl bg-muted/50 px-4 py-3 text-xs text-muted-foreground">
-                  {notifPermission === "denied"
-                    ? "Notifications are blocked in this browser. Re-enable them in device settings."
-                    : isStandalone
-                      ? "Installed app detected. Background web push can arrive when the phone is locked if the browser and OS allow it."
-                      : "For the best background notification support, install this app to your home screen first."}
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
 
+
+        {/* Sign out */}
         <motion.div
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.25 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+          style={{ textAlign: "center", paddingBottom: 32 }}
         >
-          <Card className="rounded-3xl border shadow-sm">
-            <CardContent className="space-y-4 p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Latest shop messages</p>
-                  <p className="text-xs text-muted-foreground">Your newest updates stay here.</p>
-                </div>
-                <Button variant="ghost" size="sm" onClick={() => setLocation("/notifications")}>
-                  View all
-                </Button>
-              </div>
-              {latestMessages.length > 0 ? (
-                <div className="space-y-3">
-                  {latestMessages.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-border/60 bg-background px-4 py-3">
-                      <p className="text-sm font-medium text-foreground">{item.message}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{item.read ? "Read" : "Unread"}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-                  No messages yet.
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          <button
+            onClick={() => {
+              localStorage.removeItem("punchCardUserId");
+              setLocation("/onboarding");
+            }}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#334155",
+              fontSize: 13,
+              cursor: "pointer",
+              padding: "8px 16px",
+            }}
+          >
+            Sign out
+          </button>
         </motion.div>
       </div>
-    </MobileLayout>
+    </div>
   );
 }

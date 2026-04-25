@@ -6,32 +6,12 @@ import {
   MarkNotificationReadParams,
   MarkNotificationReadResponse,
 } from "@workspace/api-zod";
-import webpush from "web-push";
 import {
   createNotifications,
-  deletePushSubscriptionById,
   listNotificationsByUser,
-  listPushSubscriptionsByUserIds,
   markNotificationReadById,
 } from "../lib/supabase";
-
-// Configure VAPID once at startup — strip any "=" padding that web-push rejects
-if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-  const pubKey = process.env.VAPID_PUBLIC_KEY.replace(/=+$/, "").trim();
-  const privKey = process.env.VAPID_PRIVATE_KEY.replace(/=+$/, "").trim();
-  try {
-    webpush.setVapidDetails(
-      process.env.VAPID_SUBJECT || "mailto:admin@punchcard.app",
-      pubKey,
-      privKey,
-    );
-  } catch (e) {
-    // Log but don't crash — push will simply not be sent
-    import("../lib/logger").then(({ logger }) =>
-      logger.warn({ err: e }, "VAPID setup failed — web push disabled"),
-    );
-  }
-}
+import { sendWebPush } from "../lib/push";
 
 const router: IRouter = Router();
 
@@ -64,34 +44,8 @@ router.post("/notifications", async (req, res): Promise<void> => {
   // Save notification records
   const inserted = await createNotifications(userIds, message);
 
-  // Send Web Push to each subscribed user (fire-and-forget, don't block response)
-  if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
-    const subscriptions = await listPushSubscriptionsByUserIds(userIds);
-
-    const payload = JSON.stringify({
-      title: "New message from your shop",
-      body: message,
-      url: "/notifications",
-    });
-
-    const sendPromises = subscriptions.map(async (sub) => {
-      try {
-        await webpush.sendNotification(
-          { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-          payload,
-        );
-      } catch (err: unknown) {
-        // If subscription is expired/invalid, remove it
-        const status = (err as { statusCode?: number }).statusCode;
-        if (status === 410 || status === 404) {
-          await deletePushSubscriptionById(sub.id);
-        }
-      }
-    });
-
-    // Send in background, respond immediately
-    Promise.all(sendPromises).catch(() => {});
-  }
+  // Send Web Push in background
+  sendWebPush(userIds, message).catch(() => {});
 
   res.status(201).json(inserted);
 });

@@ -1,9 +1,17 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Bell, Home, Settings, Sparkles, Users } from "lucide-react";
+import { Bell, Home, Settings, Sparkles, Users, ChevronLeft } from "lucide-react";
 import { useGetSettings, useListNotifications } from "@workspace/api-client-react";
 
-export function MobileLayout({ children, title }: { children: React.ReactNode; title?: string }) {
+type PremiumSettings = {
+  heroBadge?: string | null;
+  shopName?: string | null;
+  welcomeMessage?: string | null;
+  accentColor?: string | null;
+  backgroundImageUrl?: string | null;
+};
+
+export function MobileLayout({ children, title, showBack, backHref = "/card" }: { children: React.ReactNode; title?: string; showBack?: boolean; backHref?: string }) {
   const userId = localStorage.getItem("punchCardUserId");
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -24,12 +32,22 @@ export function MobileLayout({ children, title }: { children: React.ReactNode; t
   }, [notifications]);
 
   return (
-    <div className="flex min-h-[100dvh] w-full justify-center bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.08),transparent_30%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]">
-      <div className="relative flex w-full max-w-[430px] flex-col overflow-hidden bg-background/70 shadow-2xl backdrop-blur">
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border/50 bg-background/80 px-6 backdrop-blur-xl">
-          <h1 className="text-xl font-semibold tracking-tight">{title || "Punch Card"}</h1>
+    <div className="flex min-h-[100dvh] w-full justify-center bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),transparent_28%),linear-gradient(180deg,#f8fafc_0%,#e0f2fe_38%,#eef2ff_100%)] px-2 py-3">
+      <div className="relative flex w-full max-w-[430px] flex-col overflow-hidden rounded-[2rem] border border-white/60 bg-white/55 shadow-[0_30px_80px_-28px_rgba(15,23,42,0.35)] backdrop-blur-2xl">
+        <header className="sticky top-0 z-10 flex h-18 items-center justify-between border-b border-white/50 bg-white/70 px-6 py-4 backdrop-blur-xl">
+          <div className="flex items-center gap-3">
+            {showBack && (
+              <Link href={backHref} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200/70 bg-white/80 shadow-sm transition-colors hover:bg-slate-100">
+                <ChevronLeft className="h-5 w-5 text-slate-700" />
+              </Link>
+            )}
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.35em] text-slate-500">Loyalty pass</p>
+              <h1 className="text-xl font-semibold tracking-tight" data-display="serif">{title || "Punch Card"}</h1>
+            </div>
+          </div>
           {userId && (
-            <Link href="/notifications" className="relative -mr-2 rounded-full p-2 transition-colors hover:bg-secondary/50">
+            <Link href="/notifications" className="relative -mr-2 rounded-full border border-slate-200/70 bg-white/80 p-2.5 shadow-sm transition-colors hover:bg-secondary/50">
               <Bell className="h-5 w-5 text-foreground/80" />
               {unreadCount > 0 && (
                 <span className="absolute right-2 top-1.5 h-2 w-2 rounded-full bg-destructive" />
@@ -46,7 +64,8 @@ export function MobileLayout({ children, title }: { children: React.ReactNode; t
 
 export function AdminLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const { data: settings } = useGetSettings();
+  const { data: rawSettings } = useGetSettings();
+  const settings = rawSettings as (typeof rawSettings & PremiumSettings) | undefined;
   const accentColor = settings?.accentColor || "#06b6d4";
   const adminHeroStyle = settings?.backgroundImageUrl
     ? {
@@ -64,21 +83,29 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="min-h-[100dvh] bg-[linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] text-slate-900">
+    <div className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,_rgba(6,182,212,0.12),transparent_25%),linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] text-slate-900">
       <div className="mx-auto flex min-h-[100dvh] max-w-[1400px]">
-        <aside className="hidden w-80 shrink-0 border-r border-slate-200/80 bg-slate-950 px-6 py-8 text-white md:flex md:flex-col">
-          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl" style={adminHeroStyle}>
+        <aside className="hidden w-80 shrink-0 border-r border-slate-200/80 bg-slate-950/98 px-6 py-8 text-white md:flex md:flex-col">
+          <div className="rounded-[2rem] border border-white/10 bg-white/5 p-6 shadow-2xl shadow-cyan-950/20" style={adminHeroStyle}>
             <div className="flex items-center gap-3">
-              <div className="rounded-2xl p-3" style={{ backgroundColor: `${accentColor}26`, color: accentColor }}>
-                <Sparkles className="h-6 w-6" />
+              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-2xl bg-white p-1 shadow-sm">
+                <img src="/logo.png" alt="Cool Spot Logo" className="h-full w-full object-contain" />
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.35em]" style={{ color: accentColor }}>Admin panel</p>
-                <h1 className="text-2xl font-semibold tracking-tight">Digital Pun Master</h1>
+                <h1 className="text-2xl font-semibold tracking-tight" data-display="serif">{settings?.shopName || "Digital Pun Master"}</h1>
               </div>
             </div>
             <p className="mt-5 text-sm leading-6 text-slate-300">
               Control the look of the card, manage customer accounts, and send offers without leaving the dashboard.
+            </p>
+          </div>
+
+          <div className="mt-6 rounded-[1.75rem] border border-white/10 bg-white/5 p-5 text-sm text-slate-300">
+            <p className="text-[11px] uppercase tracking-[0.35em] text-slate-400">Creative direction</p>
+            <p className="mt-3 font-medium text-white">{settings?.heroBadge || "Member status"}</p>
+            <p className="mt-2 leading-6">
+              {settings?.welcomeMessage || "Shape the customer experience with richer card styling, stronger messages, and tighter campaign design."}
             </p>
           </div>
 
@@ -107,7 +134,7 @@ export function AdminLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-y-auto px-4 py-4 md:px-8 md:py-8">
           <div className="mb-6 rounded-[2rem] border border-white/70 bg-white/70 px-5 py-4 shadow-lg shadow-slate-900/5 backdrop-blur md:hidden">
             <p className="text-xs uppercase tracking-[0.35em]" style={{ color: accentColor }}>Admin panel</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">Digital Pun Master</h1>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight" data-display="serif">{settings?.shopName || "Digital Pun Master"}</h1>
           </div>
 
           <div className="mx-auto max-w-6xl pb-24 md:pb-8">{children}</div>

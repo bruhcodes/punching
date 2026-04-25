@@ -10,10 +10,10 @@
   "scope": ".",
   "icons": [
     {
-      "src": "./favicon.svg",
-      "sizes": "192x192 512x1024",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "./logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "shortcuts": [

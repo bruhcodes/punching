@@ -1,0 +1,7 @@
+node_modules
+dist
+.git
+.DS_Store
+artifacts/api-server/.env
+artifacts/punch-card/.env
+attached_assets

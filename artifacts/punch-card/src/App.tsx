@@ -14,6 +14,7 @@ import AdminUsers from "./pages/admin/Users";
 import AdminUserDetail from "./pages/admin/UserDetail";
 import AdminNotifications from "./pages/admin/AdminNotifications";
 import AdminSettings from "./pages/admin/Settings";
+import ScanQRCode from "./pages/admin/ScanQRCode";
 import { AdminLockGate } from "./components/admin/AdminLockGate";
 
 const queryClient = new QueryClient({
@@ -58,6 +59,12 @@ function Router() {
     </AdminLockGate>
   );
 
+  const LockedScan = () => (
+    <AdminLockGate>
+      <ScanQRCode />
+    </AdminLockGate>
+  );
+
   return (
     <Switch>
       <Route path="/" component={InstallPrompt} />
@@ -68,6 +75,7 @@ function Router() {
       <Route path="/admin" component={LockedDashboard} />
       <Route path="/admin/users" component={LockedUsers} />
       <Route path="/admin/users/:id" component={LockedUserDetail} />
+      <Route path="/admin/scan" component={LockedScan} />
       <Route path="/admin/notifications" component={LockedNotifications} />
       <Route path="/admin/settings" component={LockedSettings} />
 

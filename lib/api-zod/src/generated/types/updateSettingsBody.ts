@@ -14,4 +14,8 @@ export interface UpdateSettingsBody {
   backgroundImageUrl?: string;
   accentColor?: string;
   welcomeMessage?: string;
+  heroBadge?: string;
+  rewardLabel?: string;
+  dealLabel?: string;
+  cardStyle?: string;
 }

@@ -202,6 +202,10 @@ export const GetSettingsResponse = zod.object({
   backgroundImageUrl: zod.string().nullish(),
   accentColor: zod.string().nullish(),
   welcomeMessage: zod.string().nullish(),
+  heroBadge: zod.string().nullish(),
+  rewardLabel: zod.string().nullish(),
+  dealLabel: zod.string().nullish(),
+  cardStyle: zod.string().nullish(),
 });
 
 /**
@@ -215,6 +219,10 @@ export const UpdateSettingsBody = zod.object({
   backgroundImageUrl: zod.string().optional(),
   accentColor: zod.string().optional(),
   welcomeMessage: zod.string().optional(),
+  heroBadge: zod.string().optional(),
+  rewardLabel: zod.string().optional(),
+  dealLabel: zod.string().optional(),
+  cardStyle: zod.string().optional(),
 });
 
 export const UpdateSettingsResponse = zod.object({
@@ -226,6 +234,10 @@ export const UpdateSettingsResponse = zod.object({
   backgroundImageUrl: zod.string().nullish(),
   accentColor: zod.string().nullish(),
   welcomeMessage: zod.string().nullish(),
+  heroBadge: zod.string().nullish(),
+  rewardLabel: zod.string().nullish(),
+  dealLabel: zod.string().nullish(),
+  cardStyle: zod.string().nullish(),
 });
 
 /**

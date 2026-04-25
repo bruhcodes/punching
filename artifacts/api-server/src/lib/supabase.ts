@@ -15,11 +15,15 @@ type SupabaseSettingsRow = {
   id: string;
   stamp_type: string;
   background_style: string;
+  card_style: string | null;
   progress_style: string;
   shop_name: string;
   background_image_url: string | null;
   accent_color: string | null;
   welcome_message: string | null;
+  hero_badge: string | null;
+  reward_label: string | null;
+  deal_label: string | null;
 };
 
 type SupabaseNotificationRow = {
@@ -119,6 +123,10 @@ function mapSettings(row: SupabaseSettingsRow) {
     backgroundImageUrl: row.background_image_url,
     accentColor: row.accent_color,
     welcomeMessage: row.welcome_message,
+    heroBadge: row.hero_badge,
+    rewardLabel: row.reward_label,
+    dealLabel: row.deal_label,
+    cardStyle: row.card_style,
   };
 }
 
@@ -160,7 +168,7 @@ export async function listUsers(search?: string) {
 
   if (search) {
     const normalized = search.replace(/[%*,]/g, " ").trim();
-    params.set("or", `(name.ilike.*${normalized}*,phone.ilike.*${normalized}*,id.ilike.*${normalized}*)`);
+    params.set("or", `(name.ilike.*${normalized}*,phone.ilike.*${normalized}*)`);
   }
 
   const rows = await request<SupabaseUserRow[]>(`users?${params.toString()}`);
@@ -227,7 +235,7 @@ export async function updateUserPunchCount(id: string, nextPunchCount: number) {
 
 export async function updateUserRecord(
   id: string,
-  data: { name?: string; phone?: string; avatarUrl?: string | null },
+  data: { name?: string; phone?: string; avatarUrl?: string | null; totalPunches?: number },
 ) {
   const params = new URLSearchParams({
     id: `eq.${id}`,
@@ -241,6 +249,7 @@ export async function updateUserRecord(
       ...(data.name !== undefined ? { name: data.name } : {}),
       ...(data.phone !== undefined ? { phone: data.phone } : {}),
       ...(data.avatarUrl !== undefined ? { avatar_url: data.avatarUrl || null } : {}),
+      ...(data.totalPunches !== undefined ? { total_punches: data.totalPunches } : {}),
     },
   });
 
@@ -277,11 +286,15 @@ export async function getOrCreateSettings() {
         id: "default",
         stamp_type: "star",
         background_style: "white",
+        card_style: "luxe",
         progress_style: "stamps",
         shop_name: "Punch Card",
         background_image_url: null,
         accent_color: "#111827",
         welcome_message: "Tap your QR code in-store to collect punches.",
+        hero_badge: "Member status",
+        reward_label: "Free drink",
+        deal_label: "Deal bar",
       },
     ],
   });

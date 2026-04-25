@@ -45,7 +45,7 @@ export default function Notifications() {
   if (!userId) return null;
 
   return (
-    <MobileLayout title="Notifications">
+    <MobileLayout title="Notifications" showBack>
       <div className="space-y-4 pt-4">
         {isLoading ? (
           <div className="space-y-4">

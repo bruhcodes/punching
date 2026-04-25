@@ -19,7 +19,9 @@ import {
   listUsers,
   updateUserRecord,
   updateUserPunchCount,
+  createNotifications,
 } from "../lib/supabase";
+import { sendWebPush } from "../lib/push";
 
 const router: IRouter = Router();
 
@@ -38,7 +40,7 @@ function parseCreateUserBody(body: unknown) {
 function parseUpdateUserBody(body: unknown) {
   if (!body || typeof body !== "object") return null;
   const candidate = body as Record<string, unknown>;
-  const parsed: { name?: string; phone?: string; avatarUrl?: string } = {};
+  const parsed: { name?: string; phone?: string; avatarUrl?: string; totalPunches?: number } = {};
 
   if (candidate.name !== undefined) {
     if (typeof candidate.name !== "string") return null;
@@ -51,6 +53,10 @@ function parseUpdateUserBody(body: unknown) {
   if (candidate.avatarUrl !== undefined) {
     if (typeof candidate.avatarUrl !== "string") return null;
     parsed.avatarUrl = candidate.avatarUrl;
+  }
+  if (candidate.totalPunches !== undefined) {
+    if (typeof candidate.totalPunches !== "number") return null;
+    parsed.totalPunches = candidate.totalPunches;
   }
 
   return parsed;
@@ -177,6 +183,14 @@ router.post("/users/:id/punch", async (req, res): Promise<void> => {
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
+  }
+
+  try {
+    const msg = `You earned a punch! 🌟 (${user.punchCount}/${user.totalPunches})`;
+    await createNotifications([user.id], msg);
+    sendWebPush([user.id], msg).catch(() => {});
+  } catch (err) {
+    // ignore notification error
   }
 
   res.json(AddPunchResponse.parse(user));

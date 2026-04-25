@@ -1,4 +1,4 @@
-const CACHE_NAME = 'punch-card-v3';
+const CACHE_NAME = 'punch-card-v5';
 
 function withBasePath(path) {
   return new URL(path, self.registration.scope).pathname;
@@ -9,7 +9,7 @@ self.addEventListener('install', (event) => {
     withBasePath('./'),
     withBasePath('./index.html'),
     withBasePath('./manifest.json'),
-    withBasePath('./favicon.svg')
+    withBasePath('./app-icon.svg')
   ];
 
   self.skipWaiting();
@@ -40,6 +40,22 @@ self.addEventListener('fetch', (event) => {
   }
 
   const appShell = withBasePath('./index.html');
+  const isNavigation = event.request.mode === 'navigate';
+
+  if (isNavigation) {
+    event.respondWith(
+      fetch(event.request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(appShell, copy);
+          });
+          return response;
+        })
+        .catch(() => caches.match(appShell))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((response) => {
@@ -59,8 +75,8 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || data.message || 'New notification',
-    icon: withBasePath('./favicon.svg'),
-    badge: withBasePath('./favicon.svg'),
+    icon: withBasePath('./app-icon.svg'),
+    badge: withBasePath('./app-icon.svg'),
     vibrate: [100, 50, 100],
     tag: data.tag || 'punch-card-alert',
     renotify: true,

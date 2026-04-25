@@ -464,6 +464,18 @@ components:
         welcomeMessage:
           type: string
           nullable: true
+        heroBadge:
+          type: string
+          nullable: true
+        rewardLabel:
+          type: string
+          nullable: true
+        dealLabel:
+          type: string
+          nullable: true
+        cardStyle:
+          type: string
+          nullable: true
       required:
         - id
         - stampType
@@ -487,6 +499,14 @@ components:
         accentColor:
           type: string
         welcomeMessage:
+          type: string
+        heroBadge:
+          type: string
+        rewardLabel:
+          type: string
+        dealLabel:
+          type: string
+        cardStyle:
           type: string
 
     Stats:

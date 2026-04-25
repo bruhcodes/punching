@@ -1,11 +1,12 @@
 import { useRoute } from "wouter";
-import { useGetUser, getGetUserQueryKey, useAddPunch, useRemovePunch, useResetPunches, useGetSettings, getGetSettingsQueryKey, getGetStatsQueryKey, getListUsersQueryKey } from "@workspace/api-client-react";
+import { useGetUser, getGetUserQueryKey, useAddPunch, useRemovePunch, useResetPunches, useGetSettings, getGetSettingsQueryKey, getGetStatsQueryKey, getListUsersQueryKey, useListNotifications } from "@workspace/api-client-react";
 import { AdminLayout } from "@/components/layout/Layouts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { ArrowLeft, Plus, Minus, RotateCcw } from "lucide-react";
+import { format, formatDistanceToNow } from "date-fns";
+import { ArrowLeft, Crown, Minus, Plus, RotateCcw, Clock } from "lucide-react";
 import { Link } from "wouter";
 import { toast } from "sonner";
 
@@ -21,9 +22,20 @@ export default function AdminUserDetail() {
     }
   });
 
-  const { data: settings } = useGetSettings({
+  const { data: notifications } = useListNotifications(
+    { userId },
+    {
+      query: {
+        enabled: !!userId,
+        queryKey: ["notifications", userId]
+      }
+    }
+  );
+
+  const { data: rawSettings } = useGetSettings({
     query: { queryKey: getGetSettingsQueryKey() }
   });
+  const settings = rawSettings as (typeof rawSettings & { heroBadge?: string | null; accentColor?: string | null }) | undefined;
 
   const addPunch = useAddPunch();
   const removePunch = useRemovePunch();
@@ -67,6 +79,22 @@ export default function AdminUserDetail() {
     });
   };
 
+  const handleUpdateTotalPunches = async (newTotal: string) => {
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ totalPunches: Number(newTotal) })
+      });
+      if (!res.ok) throw new Error("Failed to update");
+      const data = await res.json();
+      refreshUserData(data);
+      toast.success(`Reward threshold updated to ${newTotal}`);
+    } catch {
+      toast.error("Failed to update reward threshold");
+    }
+  };
+
   if (isLoading || !user) {
     return (
       <AdminLayout>
@@ -85,22 +113,26 @@ export default function AdminUserDetail() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">{user.name}</h1>
+            <h1 className="text-3xl font-bold tracking-tight" data-display="serif">{user.name}</h1>
             <p className="text-muted-foreground">{user.phone}</p>
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="md:col-span-2">
+          <Card className="overflow-hidden rounded-[2rem] border-white/80 bg-white/92 shadow-xl shadow-slate-900/5 md:col-span-2">
             <CardHeader>
               <CardTitle>Punch Card</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col items-center py-8">
-                <div className="text-6xl font-bold text-primary mb-2">
-                  {user.punchCount} <span className="text-3xl text-muted-foreground">/ 10</span>
+              <div className="rounded-[2rem] bg-[linear-gradient(145deg,#020617_0%,#0f172a_50%,#164e63_100%)] px-6 py-8 text-white">
+                <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-3 py-1 text-[11px] uppercase tracking-[0.3em] text-slate-200">
+                  <Crown className="h-3.5 w-3.5" style={{ color: settings?.accentColor || "#67e8f9" }} />
+                  {settings?.heroBadge || "Member status"}
                 </div>
-                <p className="text-muted-foreground mb-8">Current Punches</p>
+                <div className="text-6xl font-bold text-white mb-2">
+                  {user.punchCount} <span className="text-3xl text-muted-foreground">/ {user.totalPunches}</span>
+                </div>
+                <p className="mb-8 text-slate-300">Current punches</p>
                 
                 <div className="flex gap-4">
                   <Button 
@@ -116,7 +148,7 @@ export default function AdminUserDetail() {
                     size="lg" 
                     className="h-16 px-12 rounded-2xl text-lg font-semibold"
                     onClick={handleAddPunch}
-                    disabled={user.punchCount >= 10 || addPunch.isPending}
+                    disabled={user.punchCount >= user.totalPunches || addPunch.isPending}
                   >
                     <Plus className="w-6 h-6 mr-2" /> Add Punch
                   </Button>
@@ -126,11 +158,25 @@ export default function AdminUserDetail() {
           </Card>
 
           <div className="space-y-6">
-            <Card>
+            <Card className="rounded-[2rem] border-white/80 bg-white/92 shadow-xl shadow-slate-900/5">
               <CardHeader>
                 <CardTitle className="text-lg">Stats</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div>
+                  <div className="text-sm text-muted-foreground mb-2">Punches Needed for Reward</div>
+                  <Select value={user.totalPunches.toString()} onValueChange={handleUpdateTotalPunches}>
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="Select total punches" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="5">5 Punches (5 for 1)</SelectItem>
+                      <SelectItem value="8">8 Punches (8 for 1)</SelectItem>
+                      <SelectItem value="10">10 Punches (10 for 1)</SelectItem>
+                      <SelectItem value="12">12 Punches (12 for 1)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Total Lifetime Punches</div>
                   <div className="text-2xl font-semibold">{user.totalPunches}</div>
@@ -142,7 +188,7 @@ export default function AdminUserDetail() {
               </CardContent>
             </Card>
 
-            <Card className="border-destructive/20 bg-destructive/5">
+            <Card className="rounded-[2rem] border-destructive/20 bg-destructive/5 shadow-xl shadow-slate-900/5">
               <CardHeader>
                 <CardTitle className="text-lg text-destructive">Danger Zone</CardTitle>
               </CardHeader>
@@ -157,6 +203,31 @@ export default function AdminUserDetail() {
                 </Button>
               </CardContent>
             </Card>
+            <Card className="rounded-[2rem] border-white/80 bg-white/92 shadow-xl shadow-slate-900/5">
+              <CardHeader>
+                <CardTitle className="text-lg">Recent Punch History</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {notifications && notifications.length > 0 ? (
+                  <div className="space-y-4 max-h-[300px] overflow-y-auto">
+                    {notifications.map((n) => (
+                      <div key={n.id} className="flex items-start gap-3 text-sm">
+                        <Clock className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+                        <div>
+                          <p>{n.message}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(n.createdAt), { addSuffix: true })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No recent punches recorded.</p>
+                )}
+              </CardContent>
+            </Card>
+
           </div>
         </div>
       </div>

@@ -15,4 +15,8 @@ export interface Settings {
   backgroundImageUrl?: string | null;
   accentColor?: string | null;
   welcomeMessage?: string | null;
+  heroBadge?: string | null;
+  rewardLabel?: string | null;
+  dealLabel?: string | null;
+  cardStyle?: string | null;
 }
